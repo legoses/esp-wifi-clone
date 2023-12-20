@@ -5,6 +5,7 @@
 #include <beaconFrame.h>
 #include <apInfo.h>
 #include <WiFi.h>
+#include <WiFiAP.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 //#include <WebServer.h>
@@ -22,21 +23,21 @@
 //configure AP
 const char *CONFIG_SSID = "hello";
 const char *CONFIG_PASS = "311202-nv";
+int switchChan = 0;
 
 const int cmdLen = 32;
 //function comparing client command to this array will return int containing the command position in the array
 //Int will be used in switch case to determing next step
-uint8_t cmdArray[][cmdLen] = {
+char cmdArray[][cmdLen] = {
                                     "help", //0
-                                    "set-stage", //1 
-                                    "get-stage",  //2
-                                    "start", //3
-                                    "stop", //4
-                                    "list-ap", //5
-                                    "list-clients", //6
-                                    "select-ap", //7
-                                    "select-clients", //8
-                                    "select-all-clients" //9
+                                    "scan-ap-start", //1 
+                                    "scan-stop", //2
+                                    "scan-client-start", //3
+                                    "list-ap", //4
+                                    "list-clients", //5
+                                    "select-ap", //6
+                                    "select-clients", //7
+                                    "select-all-clients" //8
                                     };
 
 AsyncWebServer Server(80);
@@ -147,8 +148,6 @@ void wifiCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
             if(mgmtPacket->payload[0] == BEACON) {
                 signed rssi = mgmtPacket->rx_ctrl.rssi;
                 uint8_t channel = mgmtPacket->rx_ctrl.channel;
-                //Serial.print("Channel: ");
-                //Serial.println(channel);
                 Serial.println("Beacon");
                 parseBeacon(mgmtPacket, rssi, channel);
             }
@@ -159,7 +158,6 @@ void wifiCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
             break;
     }
 }
-
 void configAP() {
     if(!WiFi.softAP(CONFIG_SSID, CONFIG_PASS)) {
         Serial.println("Config wifi failed");
@@ -169,29 +167,14 @@ void configAP() {
     }
 }
 
-
 /*
     Make this function disable wifi if it is already enabled
     Have it take a parameter to set the packet filter
 */
 //Config wifi, change packet filter type depending on which stage program is in
-int configWifi(int stage) {
-    //Deinit wifi if it is active in order to change parameters
-    esp_wifi_set_promiscuous(false);
-    esp_wifi_stop();
-    esp_wifi_deinit();
-
-    switch(stage) {
-        case 0:
-            Serial.println("Setting filter to MGMT");
-           filter.filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT;
-           break;
-        case 1:
-            Serial.println("Setting filter to DATA");
-            filter.filter_mask = WIFI_PROMIS_FILTER_MASK_DATA;
-            break;
-    }
-
+int configWifi() {
+    int stage = 0;
+    
     if(esp_wifi_init(&config) != ESP_OK) {
         return -1;
     }
@@ -200,20 +183,10 @@ int configWifi(int stage) {
         return -1;
     }
 
-    if(esp_wifi_set_promiscuous_filter(&filter) != ESP_OK) {
-        return -1;
-    }
-
     if(esp_wifi_set_promiscuous_rx_cb(wifiCallback) != ESP_OK) {
         return -1;
     }
     
-    if(esp_wifi_set_promiscuous(true) != ESP_OK) {
-        return -1;
-    }
-
-    scanStart = millis();
-
     return 0;
 }
 
@@ -229,7 +202,7 @@ void my_disp_flush(lv_disp_drv_t *disp,
 }
 
 
-int getCommand(uint8_t data[], int len) {
+int getCommand(char data[], int len) {
     for(int i = 0; i < len; i++) {
         if(memcmp(cmdArray[i], data, len) == 0) {
             return i;
@@ -239,21 +212,59 @@ int getCommand(uint8_t data[], int len) {
 }
 
 
+void configurePromisc(int filterMask) {
+    esp_wifi_set_promiscuous(false);
+
+    switch(filterMask) {
+        case 0:
+        filter.filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT;
+        break;
+        case 1:
+        filter.filter_mask = WIFI_PROMIS_FILTER_MASK_DATA;
+        break;
+    }
+    esp_wifi_set_promiscuous_filter(&filter);
+    esp_wifi_set_promiscuous(true);
+}
+
+
 void recvMsg(uint8_t *data, size_t len) {
     if(len <= cmdLen) {
-        //convert command to lowercase
-        
-        uint8_t cmd[len];
+        //convert command to lowercase 
+        char cmd[len];
         for(int i = 0; i < len; i++) {
-            cmd[i] = data[i];
+            cmd[i] = tolower(data[i]);
         }
         
 
         int cmdInt = getCommand(cmd, len);
-        Serial.println(cmdInt);
-    }
-    
 
+        switch(cmdInt) {
+            case 0:
+            WebSerial.println("Help dialog placeholder");
+            break;
+
+            case 1:
+            configurePromisc(0); //init scan for AP
+            WebSerial.println("Starting AP scan");
+            switchChan = 1;
+            break;
+
+            case 2:
+            esp_wifi_set_promiscuous(false); //stop ap scan
+            WebSerial.println("Stopping scan");
+            switchChan = 0;
+            break;
+
+            case 3:
+            configurePromisc(1); //start client scan
+            WebSerial.println("Starting Client scan");
+            break;
+
+            default:
+            WebSerial.println("[ERROR] Command not found");
+        }
+    }
 }
 
 
@@ -266,24 +277,30 @@ void setup()
     Serial.begin(115200);
     //Serup wifi access point
     Serial.println("Setting up Config Access Point");
-    configAP();
 
     //Config web server
+    configAP();
     Serial.println("Configuring Wifi");
-    if(configWifi(currentMode) == -1) {
+    if(configWifi() == -1) {
         while(true) {
             Serial.println("Unable to initialize wifi");
             delay(1000);
         }
     }
-    esp_wifi_start();
+
+    if(esp_wifi_start() != ESP_OK) {
+        while(1) {
+            Serial.println("Unable to start wifi");
+            delay(500);
+        }
+    }
 
     //Setup serial webpage
     WebSerial.begin(&Server);
     WebSerial.msgCallback(recvMsg);
     Server.begin();
     Serial.print("IP Address: ");
-    Serial.println(WiFi.localIP());
+    Serial.println(WiFi.softAPIP());
 
     rm67162_init(); // amoled lcd initialization
 
@@ -346,45 +363,28 @@ void setup()
     lv_obj_add_style(minuteCont, &clock_obj_style, LV_PART_MAIN);
     lv_obj_add_style(seperator, &sep_style, LV_PART_MAIN);
     Serial.println("Display initialized");
-
-}
-
-
-void changeChannel() {
-    if(millis() - curTime > 1000) {
-        if(channel <= 12) {
-            channel++;
-            esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
-        }
-        else {
-            channel = 0;
-            esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
-        }
-        curTime = millis();
-    }
 }
 
 
 void loop()
 {
-    Serial.print("IP Address: ");
-    Serial.println(WiFi.localIP());
-    switch(currentMode) {
-        case 1:
-            changeChannel();
-            if((millis() - scanStart > scanTime)) {
-                //currentMode = 2;
-                configWifi(currentMode);
-            }
-            break;
-        case 2:
-            changeChannel();
-            if((millis() - scanStart > scanTime)) {
-                //currentMode = 3;
-            }
+    Serial.println("loop");
+    
+    if(switchChan == 1) {
 
+        if(millis() - curTime > 1000) {
+            if(channel <= 12) {
+                channel++;
+                esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+            }
+            else {
+                channel = 0;
+                esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+            }
+            curTime = millis();
+        }
     }
-
+    
     lv_timer_handler();
     delay(500);
 }
