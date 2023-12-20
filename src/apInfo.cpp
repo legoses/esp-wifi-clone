@@ -16,6 +16,25 @@ APInfo::APInfo() {
     }
 }
 
+int APInfo::getClientCount(int ap) {
+    if(ap < this->numAP) {
+        return clientCount[ap];
+    }
+
+    return -1;
+}
+
+void APInfo::getClient(uint8_t store[], int ap, int client) {
+    if(ap < this->curNum && this->clientCount[ap] < this->numClient) {
+        store[0] = clients[ap][client][0];
+        store[1] = clients[ap][client][1];
+        store[2] = clients[ap][client][2];
+        store[3] = clients[ap][client][3];
+        store[4] = clients[ap][client][4];
+        store[5] = clients[ap][client][5];
+    }
+}
+
 void APInfo::addClient(uint8_t mac[], int pos) {
     //Grab the amount of clients currently stored for the selected AP
     int numClient = clientCount[pos];
@@ -54,7 +73,7 @@ void APInfo::copyInfo(char storeArr[], char copyArr[], int len) {
     storeArr[len] = '\0';
 }
 
-int APInfo::getNumClients () {
+int APInfo::getNumAP() {
     return this->curNum;
 }
 
@@ -64,20 +83,15 @@ char **APInfo::getSSID() {
 
 //Check if bssid exists in array, and return position
 int APInfo::checkExisting(uint8_t bssid[]) {
+    Serial.println("Comparing BSSID");
     for(int i = 0; i < this->curNum; i++) {
-        Serial.print("Comparing ");
-        printBSSID(bssid);
-        Serial.print(" and ");
-        printBSSID(this->BSSID[curNum]);
-        Serial.println();
-
         //Check if bssid is already stored
         if(memcmp(bssid, this->BSSID[i], 6) == 0) {
-            Serial.println("Memcpy worked");
+            //Serial.println("Memcpy worked");
             return i;
         }
     }
-    Serial.println("Memcpy did not work");
+    //Serial.println("Memcpy did not work");
     return -1;
 }
 

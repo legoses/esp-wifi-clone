@@ -226,21 +226,32 @@ void configurePromisc(int filterMask) {
         break;
     }
     esp_wifi_set_promiscuous_filter(&filter);
-    esp_wifi_set_promiscuous(true);
+    if(esp_wifi_set_promiscuous(true) != ESP_OK) {
+        while(1) {
+            Serial.println("Unable to set to promiscuous");
+            delay(500);
+        }
+    }
 }
 
 
 void printSSIDWeb() {
-    int num = apInfo.getNumClients();
+    int num = apInfo.getNumAP();
     char **ssidList = apInfo.getSSID();
 
     WebSerial.println("---AP List---");
-    for(int i = 0; i < num; i++) {
-        WebSerial.print(i+1);
-        WebSerial.print(". ");
-        WebSerial.println(ssidList[i]);
+    if(num > 0) {
+        for(int i = 0; i < num; i++) {
+                WebSerial.print(i+1);
+                WebSerial.print(". ");
+                WebSerial.println(ssidList[i]);
+            }
+        WebSerial.println();
     }
-    WebSerial.println();
+    else {
+        WebSerial.println("No Access Points Detected.");
+    }
+    
 }
 
 
@@ -256,16 +267,57 @@ void selectAP(uint8_t *data, size_t len) {
 }
 
 
+void listClients() {
+    int num = apInfo.getNumAP();
+    char **ssidList = apInfo.getSSID();
+
+    int selectedAP = 0;
+    int clientCount = apInfo.getClientCount(selectedAP);
+    uint8_t clientMac[6];
+
+    WebSerial.println("---Client list---");
+    WebSerial.println(ssidList[selectedAP]);
+    for(int i = 0; i < clientCount; i++) {
+        apInfo.getClient(clientMac, selectedAP, i);
+        WebSerial.printf("  %i. %x:%x:%x:%x:%x:%x\n", i+1, clientMac[0], clientMac[1], clientMac[2], clientMac[3], clientMac[4], clientMac[5]);
+
+        //On last iteration, reset i to zero, and iterate through clients of the next AP
+        if(i+1 == clientCount && selectedAP < num-1) {
+            selectedAP++;
+            clientCount = apInfo.getClientCount(selectedAP);
+            i=0;
+            WebSerial.print("\n\n");
+            WebSerial.println(ssidList[selectedAP]);
+        }
+    }
+    
+}
+
+
 void recvMsg(uint8_t *data, size_t len) {
     if(len <= cmdLen) {
+        char cmd[2][len]; //command and flags are stored in seperate parts of the array
+        int flagsExist = 0;
+        int divider; //location of space in command 
+
         //convert command to lowercase 
-        char cmd[len];
         for(int i = 0; i < len; i++) {
-            cmd[i] = tolower(data[i]);
+            //check if commanad has additional flags
+            if(cmd[flagsExist][i] == 20 && flagsExist != 1) {
+                flagsExist = 1;
+                divider = i+1;
+            }
+            else if(flagsExist == 0) {
+                cmd[flagsExist][i] = tolower(data[i]);
+            }
+            else if(flagsExist == 1) {
+                cmd[flagsExist][i-divider] = tolower(data[i]);
+                WebSerial.println(i-divider);
+            }
         }
         
 
-        int cmdInt = getCommand(cmd, len);
+        int cmdInt = getCommand(cmd[0], len);
 
         switch(cmdInt) {
             case 0:
@@ -295,6 +347,10 @@ void recvMsg(uint8_t *data, size_t len) {
             break;
 
             case 5:
+            //selectAP(data, len);
+            break;
+
+            case 6:
             selectAP(data, len);
 
             default:
@@ -403,11 +459,12 @@ void setup()
 
 
 void loop()
-{ 
+{
+    int curChannel = channel;
     if(switchChan == 1) {
 
         if(millis() - curTime > 1000) {
-            if(channel <= 12) {
+            if(channel <= 11) {
                 channel++;
                 esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
             }
@@ -417,6 +474,11 @@ void loop()
             }
             curTime = millis();
         }
+
+        if(curChannel != channel) {
+            Serial.printf("Current Channel: %i\n", channel);
+        }
+        
     }
     
     lv_timer_handler();
