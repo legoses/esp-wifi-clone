@@ -10,6 +10,7 @@
 #include <ESPAsyncWebServer.h>
 //#include <WebServer.h>
 #include <WebSerial.h>
+#include <spoofAP.h>
 
 
 #if ARDUINO_USB_CDC_ON_BOOT != 1
@@ -59,6 +60,7 @@ const int scanTime = 60000; // 1 minute
 int currentMode = 0;
 
 APInfo apInfo;
+SpoofAP spoofAP;
 wifi_init_config_t config = WIFI_INIT_CONFIG_DEFAULT();
 wifi_promiscuous_filter_t filter;
 
@@ -234,9 +236,23 @@ void printSSIDWeb() {
 
     WebSerial.println("---AP List---");
     for(int i = 0; i < num; i++) {
+        WebSerial.print(i+1);
+        WebSerial.print(". ");
         WebSerial.println(ssidList[i]);
     }
     WebSerial.println();
+}
+
+
+void selectAP(uint8_t *data, size_t len) {
+    for(int i = 0; i < len; i++) {
+        if(data[i] == 20) {
+            WebSerial.println("Space found");
+        }
+        else {
+            WebSerial.println("No space detected");
+        }
+    }
 }
 
 
@@ -271,11 +287,15 @@ void recvMsg(uint8_t *data, size_t len) {
             case 3:
             configurePromisc(1); //start client scan
             WebSerial.println("Starting Client scan");
+            switchChan = 1;
             break;
 
             case 4:
             printSSIDWeb();
             break;
+
+            case 5:
+            selectAP(data, len);
 
             default:
             WebSerial.println("[ERROR] Command not found");
@@ -383,9 +403,7 @@ void setup()
 
 
 void loop()
-{
-    Serial.println("loop");
-    
+{ 
     if(switchChan == 1) {
 
         if(millis() - curTime > 1000) {

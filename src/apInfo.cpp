@@ -87,7 +87,7 @@ uint8_t APInfo::getChannel(int num) {
 
 void APInfo::addAP(char ssid[], uint8_t bssid[], signed rssi, uint8_t channel, int len) {
     //Make sure ssid length is 32 or less and number of stored AP is 10 or less
-    if(checkExisting(bssid) == -1 && len < 32 && this->curNum < 10) {
+    if(checkExisting(bssid) == -1 && len < 32 && this->curNum < 10 && len > 0) {
         //Copy information to class variabes
         copyInfo(this->SSID[curNum], ssid, len);
         copyInfo(this->BSSID[curNum], bssid, 6);
