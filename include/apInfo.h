@@ -7,7 +7,7 @@
 class APInfo {
     static const int numAP = 10;
     static const int numClient = 20;
-    uint8_t SSID[numAP][32];
+    char **SSID;
     uint8_t BSSID[numAP][6];
     signed rssi[numAP];
     uint8_t channel[numAP];
@@ -16,17 +16,19 @@ class APInfo {
     int curNum;
 
     void copyInfo(uint8_t storeArr[], uint8_t copyArr[], int len);
+    void copyInfo(char storeArr[], char copyArr[], int len);
     void printBSSID(uint8_t bssid[]);
 
     public:
     APInfo();
-    uint8_t *getSSID(int num);
+    char **getSSID();
     uint8_t *getBSSID(int num);
     uint8_t getRssi(int num);
     int checkExisting(uint8_t bssid[]);
-    void addAP(uint8_t ssid[], uint8_t bssid[], signed rssi, uint8_t channel, int len);
+    void addAP(char ssid[], uint8_t bssid[], signed rssi, uint8_t channel, int len);
     uint8_t getChannel(int num);
     void addClient(uint8_t mac[], int pos);
+    int getNumClients();
 
 };
 

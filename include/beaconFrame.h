@@ -20,7 +20,7 @@ class BeaconFrame {
     void getDestinationAddress(uint8_t bssid[], int len);
     uint8_t *getPayload();
     void getBSSID(uint8_t bssid[], int len);
-    void getSSID(uint8_t ssid[], uint8_t ssidLen);
+    void getSSID(char ssid[], uint8_t ssidLen);
     uint8_t getSSIDLen();
 }__attribute__((packed));
 

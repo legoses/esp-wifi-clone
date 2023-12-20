@@ -7,6 +7,13 @@ APInfo::APInfo() {
 
     //Init client count to all zeroes
     memset(this->clientCount, 0, 6);
+
+    //Allocate memory for ssid array
+    this->SSID = (char**)malloc(numAP * sizeof(char*));
+    for(int i = 0; i < this->numAP; i++)
+    {
+        SSID[i] = (char*)malloc(32 * sizeof(char));
+    }
 }
 
 void APInfo::addClient(uint8_t mac[], int pos) {
@@ -39,6 +46,22 @@ void APInfo::copyInfo(uint8_t storeArr[], uint8_t copyArr[], int len) {
     }
 }
 
+//Overload funciton to also accept chars
+void APInfo::copyInfo(char storeArr[], char copyArr[], int len) {
+    for(int i = 0; i < len; i++) {
+        storeArr[i] = copyArr[i];
+    }
+    storeArr[len] = '\0';
+}
+
+int APInfo::getNumClients () {
+    return this->curNum;
+}
+
+char **APInfo::getSSID() {
+    return this->SSID;
+}
+
 //Check if bssid exists in array, and return position
 int APInfo::checkExisting(uint8_t bssid[]) {
     for(int i = 0; i < this->curNum; i++) {
@@ -62,12 +85,12 @@ uint8_t APInfo::getChannel(int num) {
     return this->channel[num];
 }
 
-void APInfo::addAP(uint8_t ssid[], uint8_t bssid[], signed rssi, uint8_t channel, int len) {
+void APInfo::addAP(char ssid[], uint8_t bssid[], signed rssi, uint8_t channel, int len) {
     //Make sure ssid length is 32 or less and number of stored AP is 10 or less
     if(checkExisting(bssid) == -1 && len < 32 && this->curNum < 10) {
         //Copy information to class variabes
-        this->copyInfo(this->SSID[curNum], ssid, len);
-        this->copyInfo(this->BSSID[curNum], bssid, 6);
+        copyInfo(this->SSID[curNum], ssid, len);
+        copyInfo(this->BSSID[curNum], bssid, 6);
         this->rssi[this->curNum] = rssi;
         this->channel[this->curNum] = channel;
         

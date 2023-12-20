@@ -110,7 +110,7 @@ void parseBeacon(wifi_promiscuous_pkt_t *mgmtPacket, signed rssi, uint8_t channe
     
     if(sizeof(payload) > 0) {
         //Get necessary info from beacon
-        uint8_t ssid[ssidLen];
+        char ssid[ssidLen];
         beacon->getSSID(ssid, ssidLen);
         uint8_t bssid[6];
         beacon->getBSSID(bssid, 6);
@@ -228,6 +228,18 @@ void configurePromisc(int filterMask) {
 }
 
 
+void printSSIDWeb() {
+    int num = apInfo.getNumClients();
+    char **ssidList = apInfo.getSSID();
+
+    WebSerial.println("---AP List---");
+    for(int i = 0; i < num; i++) {
+        WebSerial.println(ssidList[i]);
+    }
+    WebSerial.println();
+}
+
+
 void recvMsg(uint8_t *data, size_t len) {
     if(len <= cmdLen) {
         //convert command to lowercase 
@@ -259,6 +271,10 @@ void recvMsg(uint8_t *data, size_t len) {
             case 3:
             configurePromisc(1); //start client scan
             WebSerial.println("Starting Client scan");
+            break;
+
+            case 4:
+            printSSIDWeb();
             break;
 
             default:
