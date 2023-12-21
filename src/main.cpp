@@ -100,8 +100,6 @@ void parseBeacon(wifi_promiscuous_pkt_t *mgmtPacket, signed rssi, uint8_t channe
         00 - Last two zeroes are the version. In this case, it means we are using 802.11
 
     */
-    Serial.println("Beacon Detected");
-    Serial.println();
 
     //Cast to class to more easily parse information
     BeaconFrame *beacon = (BeaconFrame*)mgmtPacket->payload;
@@ -109,6 +107,8 @@ void parseBeacon(wifi_promiscuous_pkt_t *mgmtPacket, signed rssi, uint8_t channe
 
     //Lenth of ssid tag
     uint8_t ssidLen = beacon->getSSIDLen();
+    Serial.print("SSID len: ");
+    Serial.println(ssidLen);
     
     if(sizeof(payload) > 0) {
         //Get necessary info from beacon
