@@ -25,7 +25,7 @@ class APInfo {
     uint8_t *getBSSID(int num);
     uint8_t getRssi(int num);
     int checkExisting(uint8_t bssid[]);
-    void addAP(char ssid[], uint8_t bssid[], signed rssi, uint8_t channel, int len);
+    bool addAP(char ssid[], uint8_t bssid[], signed rssi, uint8_t channel, int len);
     uint8_t getChannel(int num);
     void addClient(uint8_t mac[], int pos);
     int getNumAP();

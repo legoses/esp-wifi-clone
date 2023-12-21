@@ -23,7 +23,7 @@
 
 //configure AP
 const char *CONFIG_SSID = "hello";
-const char *CONFIG_PASS = "311202-nv";
+const char *CONFIG_PASS = "hellowifitest";
 int switchChan = 0;
 
 const int cmdLen = 32;
@@ -119,7 +119,9 @@ void parseBeacon(wifi_promiscuous_pkt_t *mgmtPacket, signed rssi, uint8_t channe
         
         Serial.println();
         //Store ssid, bssid, and rssi to spoof later
-        apInfo.addAP(ssid, bssid, rssi, channel, ssidLen);
+        if(apInfo.addAP(ssid, bssid, rssi, channel, ssidLen)) {
+            WebSerial.println("Access Point Found.");
+        }
     }
     Serial.println();
 }
@@ -162,7 +164,6 @@ void wifiCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
 }
 void configAP() {
     if(!WiFi.softAP(CONFIG_SSID, CONFIG_PASS)) {
-        Serial.println("Config wifi failed");
         while(1) {
             Serial.println("Config fialed");
         }
@@ -219,11 +220,11 @@ void configurePromisc(int filterMask) {
 
     switch(filterMask) {
         case 0:
-        filter.filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT;
-        break;
+            filter.filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT;
+            break;
         case 1:
-        filter.filter_mask = WIFI_PROMIS_FILTER_MASK_DATA;
-        break;
+            filter.filter_mask = WIFI_PROMIS_FILTER_MASK_DATA;
+            break;
     }
     esp_wifi_set_promiscuous_filter(&filter);
     if(esp_wifi_set_promiscuous(true) != ESP_OK) {
@@ -258,7 +259,7 @@ void printSSIDWeb() {
 void selectAP(uint8_t *data, size_t len) {
     for(int i = 0; i < len; i++) {
         if(data[i] == 20) {
-            WebSerial.println("Space found");
+            WebSerial.println("Space found"); //placeholder
         }
         else {
             WebSerial.println("No space detected");
@@ -321,40 +322,40 @@ void recvMsg(uint8_t *data, size_t len) {
 
         switch(cmdInt) {
             case 0:
-            WebSerial.println("Help dialog placeholder");
-            break;
+                WebSerial.println("Help dialog placeholder");
+                break;
 
             case 1:
-            configurePromisc(0); //init scan for AP
-            WebSerial.println("Starting AP scan");
-            switchChan = 1;
-            break;
+                configurePromisc(0); //init scan for AP
+                WebSerial.println("Starting AP scan");
+                switchChan = 1;
+                break;
 
             case 2:
-            esp_wifi_set_promiscuous(false); //stop ap scan
-            WebSerial.println("Stopping scan");
-            switchChan = 0;
-            break;
+                esp_wifi_set_promiscuous(false); //stop ap scan
+                WebSerial.println("Stopping scan");
+                switchChan = 0;
+                break;
 
             case 3:
-            configurePromisc(1); //start client scan
-            WebSerial.println("Starting Client scan");
-            switchChan = 1;
-            break;
+                configurePromisc(1); //start client scan
+                WebSerial.println("Starting Client scan");
+                switchChan = 1;
+                break;
 
             case 4:
-            printSSIDWeb();
-            break;
+                printSSIDWeb();
+                break;
 
             case 5:
-            //selectAP(data, len);
-            break;
+                //selectAP(data, len);
+                break;
 
             case 6:
-            selectAP(data, len);
+                selectAP(data, len);
 
             default:
-            WebSerial.println("[ERROR] Command not found");
+                WebSerial.println("[ERROR] Command not found");
         }
     }
 }

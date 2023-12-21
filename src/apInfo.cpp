@@ -99,7 +99,7 @@ uint8_t APInfo::getChannel(int num) {
     return this->channel[num];
 }
 
-void APInfo::addAP(char ssid[], uint8_t bssid[], signed rssi, uint8_t channel, int len) {
+bool APInfo::addAP(char ssid[], uint8_t bssid[], signed rssi, uint8_t channel, int len) {
     //Make sure ssid length is 32 or less and number of stored AP is 10 or less
     if(checkExisting(bssid) == -1 && len < 32 && this->curNum < 10 && len > 0) {
         //Copy information to class variabes
@@ -114,6 +114,8 @@ void APInfo::addAP(char ssid[], uint8_t bssid[], signed rssi, uint8_t channel, i
         Serial.println();
         //Keep track of AP stored
         this->curNum++;
+        return true;
     }
     Serial.printf("Current AP: %i\n", curNum);
+    return false;
 }
