@@ -37,17 +37,23 @@ void APInfo::getClient(uint8_t store[], int ap, int client) {
 
 void APInfo::addClient(uint8_t mac[], int pos) {
     //Grab the amount of clients currently stored for the selected AP
-    int numClient = clientCount[pos];
+    int numClient = this->clientCount[pos];
     //Add client to array in same position as the AP, so it is easy to retrieve later
     if(numClient < this->numClient) {
-        Serial.print("Assicoating AP ");
-        printBSSID(this->BSSID[pos]);
-        Serial.print(" and ");
-        printBSSID(mac);
-        Serial.println();
+        if(checkClientExist(mac, pos) == 0) {
+            Serial.print("Assicoating AP ");
+            printBSSID(this->BSSID[pos]);
+            Serial.print(" and ");
+            printBSSID(mac);
+            Serial.println();
 
-        copyInfo(clients[pos][numClient], mac, 6);
-        clientCount[pos]++;
+            copyInfo(clients[pos][numClient], mac, 6);
+            Serial.print(this->SSID[pos]);
+            Serial.print(" clients: ");
+            Serial.println(this->clientCount[pos]);
+            this->clientCount[pos]++;
+
+        }
     }
     else {
         Serial.println("Client list full");
@@ -79,6 +85,18 @@ int APInfo::getNumAP() {
 
 char **APInfo::getSSID() {
     return this->SSID;
+}
+
+//check if client has already been associated with an ap before adding
+int APInfo::checkClientExist(uint8_t client[], int ap) {
+    int clientCount = this->clientCount[ap]; //get number of clients currently associated with this ap
+    for(int i = 0; i < clientCount; i++) {
+        if(memcmp(this->clients[ap][i], client, 6) == 0) {
+            Serial.println("Client already added");
+            return -1;
+        }
+    }
+    return 0;
 }
 
 //Check if bssid exists in array, and return position

@@ -31,6 +31,7 @@ class APInfo {
     int getNumAP();
     void getClient(uint8_t store[], int ap, int client); //return selected client mac for selected ap
     int getClientCount(int ap); //get number of clients connected to an ap
+    int checkClientExist(uint8_t client[], int ap);
 };
 
 #endif

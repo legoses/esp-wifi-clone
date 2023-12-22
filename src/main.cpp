@@ -21,6 +21,11 @@
 #error "Detected that PSRAM is not turned on. Please set PSRAM to OPI PSRAM in ArduinoIDE"
 #endif
 
+/*
+    TODO:
+    possibel scan for clients connected to a single AP at a time.
+*/
+
 //configure AP
 const char *CONFIG_SSID = "hello";
 const char *CONFIG_PASS = "hellowifitest";
@@ -278,17 +283,33 @@ void listClients() {
 
     WebSerial.println("---Client list---");
     WebSerial.println(ssidList[selectedAP]);
-    for(int i = 0; i < clientCount; i++) {
-        apInfo.getClient(clientMac, selectedAP, i);
-        WebSerial.printf("  %i. %x:%x:%x:%x:%x:%x\n", i+1, clientMac[0], clientMac[1], clientMac[2], clientMac[3], clientMac[4], clientMac[5]);
+    WebSerial.printf("Current clients: %i\n", clientCount);
+    int i = 0;
+    bool cont = true;
 
+    while(cont == true) {
+        apInfo.getClient(clientMac, selectedAP, i);
+        //Serial.println("While loop test");
+        if(clientCount > 0) {
+            WebSerial.printf("  %i. %x:%x:%x:%x:%x:%x\n", i+1, clientMac[0], clientMac[1], clientMac[2], clientMac[3], clientMac[4], clientMac[5]);
+        }
+        else {
+            WebSerial.println("No Clients Found.");
+        }
+
+        i++;
         //On last iteration, reset i to zero, and iterate through clients of the next AP
-        if(i+1 == clientCount && selectedAP < num-1) {
+        if(i >= clientCount) {
             selectedAP++;
             clientCount = apInfo.getClientCount(selectedAP);
             i=0;
             WebSerial.print("\n\n");
             WebSerial.println(ssidList[selectedAP]);
+            WebSerial.printf("Current clients: %i\n", clientCount);
+        }
+
+        if(selectedAP >= num) {
+            cont = false;
         }
     }
     
@@ -344,15 +365,16 @@ void recvMsg(uint8_t *data, size_t len) {
                 break;
 
             case 4:
-                printSSIDWeb();
+                printSSIDWeb(); //print access points
                 break;
 
             case 5:
-                //selectAP(data, len);
+                listClients();
                 break;
 
             case 6:
                 selectAP(data, len);
+                break;
 
             default:
                 WebSerial.println("[ERROR] Command not found");
@@ -363,10 +385,10 @@ void recvMsg(uint8_t *data, size_t len) {
 
 void setup()
 {
-    static lv_disp_drv_t disp_drv;
+    //static lv_disp_drv_t disp_drv;
     
-    static lv_disp_draw_buf_t draw_buf;
-    static lv_color_t *buf;
+    //static lv_disp_draw_buf_t draw_buf;
+    //static lv_color_t *buf;
     Serial.begin(115200);
     //Serup wifi access point
     Serial.println("Setting up Config Access Point");
@@ -395,17 +417,17 @@ void setup()
     Serial.print("IP Address: ");
     Serial.println(WiFi.softAPIP());
 
-    rm67162_init(); // amoled lcd initialization
+    //rm67162_init(); // amoled lcd initialization
 
-    lcd_setRotation(1);
+    //lcd_setRotation(1);
 
-    lv_init();
+    //lv_init();
+    /*
 
     buf = (lv_color_t *)ps_malloc(sizeof(lv_color_t) * LVGL_LCD_BUF_SIZE);
     assert(buf);
 
     lv_disp_drv_init(&disp_drv);
-    /*Change the following line to your display resolution*/
     //Sets resolution
     disp_drv.hor_res = EXAMPLE_LCD_H_RES;
     disp_drv.ver_res = EXAMPLE_LCD_V_RES;
@@ -456,12 +478,14 @@ void setup()
     lv_obj_add_style(minuteCont, &clock_obj_style, LV_PART_MAIN);
     lv_obj_add_style(seperator, &sep_style, LV_PART_MAIN);
     Serial.println("Display initialized");
+    */
 }
 
 
 void loop()
 {
     int curChannel = channel;
+    /*
     if(switchChan == 1) {
 
         if(millis() - curTime > 1000) {
@@ -475,10 +499,12 @@ void loop()
             }
             curTime = millis();
         }
-
+    
         if(curChannel != channel) {
             Serial.printf("Current Channel: %i\n", channel);
         }
+        */
+
         
     }
     
