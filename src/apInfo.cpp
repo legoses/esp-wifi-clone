@@ -101,9 +101,13 @@ int APInfo::checkClientExist(uint8_t client[], int ap) {
 
 //Check if bssid exists in array, and return position
 int APInfo::checkExisting(uint8_t bssid[]) {
-    Serial.println("Comparing BSSID");
+    Serial.print("Comparing BSSID ");
+    printBSSID(bssid);
+    Serial.println("and:");
     for(int i = 0; i < this->curNum; i++) {
         //Check if bssid is already stored
+        printBSSID(this->BSSID[i]);
+        Serial.println();
         if(memcmp(bssid, this->BSSID[i], 6) == 0) {
             //Serial.println("Memcpy worked");
             return i;

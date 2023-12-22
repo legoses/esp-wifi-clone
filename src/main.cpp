@@ -23,7 +23,7 @@
 
 /*
     TODO:
-    possibel scan for clients connected to a single AP at a time.
+    Instead of scanning for clients on all channels, only scan on channels with discovered AP
 */
 
 //configure AP
@@ -162,8 +162,15 @@ void wifiCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
             }
             break;
         case WIFI_PKT_DATA:
-            Serial.println("Data pkt");
-            scanForClient(mgmtPacket);
+            Serial.print("Data pkt first byte: ");
+            Serial.println(mgmtPacket->payload[0]);
+            if(mgmtPacket->payload[0] == 8) {
+                Serial.println("Data pkt");
+                scanForClient(mgmtPacket);
+            }
+            break;
+        case WIFI_PKT_CTRL:
+            Serial.println("ctrl packet");
             break;
     }
 }
@@ -228,7 +235,7 @@ void configurePromisc(int filterMask) {
             filter.filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT;
             break;
         case 1:
-            filter.filter_mask = WIFI_PROMIS_FILTER_MASK_DATA;
+            filter.filter_mask = WIFI_PROMIS_FILTER_MASK_DATA | WIFI_PROMIS_FILTER_MASK_CTRL;
             break;
     }
     esp_wifi_set_promiscuous_filter(&filter);
@@ -242,13 +249,13 @@ void configurePromisc(int filterMask) {
 
 
 void printSSIDWeb() {
-    int num = apInfo.getNumAP()+1;
+    int num = apInfo.getNumAP();
     char **ssidList = apInfo.getSSID();
 
     WebSerial.printf("%i ap detected\n", num);
     WebSerial.println("---AP List---");
     if(num > 0) {
-        for(int i = 0; i < 20; i++) {
+        for(int i = 0; i < num; i++) {
                 WebSerial.print(i+1);
                 WebSerial.print(". ");
                 WebSerial.println(ssidList[i]);
@@ -297,6 +304,7 @@ void listClients() {
         else {
             WebSerial.println("No Clients Found.");
         }
+        Serial.println(i);
 
         i++;
         //On last iteration, reset i to zero, and iterate through clients of the next AP
@@ -421,8 +429,6 @@ void setup()
     Serial.print("IP Address: ");
     Serial.println(WiFi.softAPIP());
 
-    esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
-
     //rm67162_init(); // amoled lcd initialization
 
     //lcd_setRotation(1);
@@ -491,7 +497,6 @@ void setup()
 void loop()
 {
     int curChannel = channel;
-    /*
     if(switchChan == 1) {
 
         if(millis() - curTime > 1000) {
@@ -500,7 +505,7 @@ void loop()
                 esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
             }
             else {
-                channel = 0;
+                channel = 1;
                 esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
             }
             curTime = millis();
@@ -513,7 +518,6 @@ void loop()
 
         
     }
-   */ 
     //lv_timer_handler();
     delay(500);
 }
