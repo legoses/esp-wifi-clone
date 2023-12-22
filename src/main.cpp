@@ -242,12 +242,13 @@ void configurePromisc(int filterMask) {
 
 
 void printSSIDWeb() {
-    int num = apInfo.getNumAP();
+    int num = apInfo.getNumAP()+1;
     char **ssidList = apInfo.getSSID();
 
+    WebSerial.printf("%i ap detected\n", num);
     WebSerial.println("---AP List---");
     if(num > 0) {
-        for(int i = 0; i < num; i++) {
+        for(int i = 0; i < 20; i++) {
                 WebSerial.print(i+1);
                 WebSerial.print(". ");
                 WebSerial.println(ssidList[i]);
@@ -283,7 +284,7 @@ void listClients() {
 
     WebSerial.println("---Client list---");
     WebSerial.println(ssidList[selectedAP]);
-    WebSerial.printf("Current clients: %i\n", clientCount);
+    //WebSerial.printf("Current clients: %i\n", clientCount);
     int i = 0;
     bool cont = true;
 
@@ -305,12 +306,15 @@ void listClients() {
             i=0;
             WebSerial.print("\n\n");
             WebSerial.println(ssidList[selectedAP]);
-            WebSerial.printf("Current clients: %i\n", clientCount);
+            //WebSerial.printf("Current clients: %i\n", clientCount);
+            
+            if(selectedAP >= num) {
+                cont = false;
+            }
         }
 
-        if(selectedAP >= num) {
-            cont = false;
-        }
+
+        delay(100);
     }
     
 }
@@ -417,6 +421,8 @@ void setup()
     Serial.print("IP Address: ");
     Serial.println(WiFi.softAPIP());
 
+    esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+
     //rm67162_init(); // amoled lcd initialization
 
     //lcd_setRotation(1);
@@ -503,11 +509,11 @@ void loop()
         if(curChannel != channel) {
             Serial.printf("Current Channel: %i\n", channel);
         }
-        */
+        
 
         
     }
-    
-    lv_timer_handler();
+   */ 
+    //lv_timer_handler();
     delay(500);
 }
