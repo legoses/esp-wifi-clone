@@ -6,11 +6,12 @@
 #include <apInfo.h>
 #include <WiFi.h>
 #include <WiFiAP.h>
-#include <AsyncTCP.h>
-#include <ESPAsyncWebServer.h>
+//#include <AsyncTCP.h>
+//#include <ESPAsyncWebServer.h>
 //#include <WebServer.h>
-#include <WebSerial.h>
+//#include <WebSerial.h>
 #include <spoofAP.h>
+#include <bleSetup.h>
 
 
 #if ARDUINO_USB_CDC_ON_BOOT != 1
@@ -34,19 +35,8 @@ int switchChan = 0;
 const int cmdLen = 32;
 //function comparing client command to this array will return int containing the command position in the array
 //Int will be used in switch case to determing next step
-char cmdArray[][cmdLen] = {
-                                    "help", //0
-                                    "scan-ap-start", //1 
-                                    "scan-stop", //2
-                                    "scan-client-start", //3
-                                    "list-ap", //4
-                                    "list-clients", //5
-                                    "select-ap", //6
-                                    "select-clients", //7
-                                    "select-all-clients" //8
-                                    };
 
-AsyncWebServer Server(80);
+//AsyncWebServer Server(80);
 
 static lv_style_t clock_obj_style;
 static lv_style_t sep_style;
@@ -59,13 +49,16 @@ const uint8_t BEACON = 128;
 const long offsetSec = 3600;
 int channel = 1;
 unsigned long curTime = millis();
-int scanStart;
-const int scanTime = 60000; // 1 minute
 //Stage. 0 is scanning for beacons. 1 is scannign for clients
 int currentMode = 0;
+int lastCmd;
 
+//Store info on scanned AP
 APInfo apInfo;
 SpoofAP spoofAP;
+//Setup BLE
+BLETerm bleTerm;
+
 wifi_init_config_t config = WIFI_INIT_CONFIG_DEFAULT();
 wifi_promiscuous_filter_t filter;
 
@@ -125,7 +118,7 @@ void parseBeacon(wifi_promiscuous_pkt_t *mgmtPacket, signed rssi, uint8_t channe
         Serial.println();
         //Store ssid, bssid, and rssi to spoof later
         if(apInfo.addAP(ssid, bssid, rssi, channel, ssidLen)) {
-            WebSerial.println("Access Point Found.");
+            //WebSerial.println("Access Point Found.");
         }
     }
     Serial.println();
@@ -216,16 +209,6 @@ void my_disp_flush(lv_disp_drv_t *disp,
 }
 
 
-int getCommand(char data[], int len) {
-    for(int i = 0; i < len; i++) {
-        if(memcmp(cmdArray[i], data, len) == 0) {
-            return i;
-        }
-    }
-    return -1;
-}
-
-
 void configurePromisc(int filterMask) {
     esp_wifi_set_promiscuous(false);
 
@@ -251,18 +234,18 @@ void printSSIDWeb() {
     int num = apInfo.getNumAP();
     char **ssidList = apInfo.getSSID();
 
-    WebSerial.printf("%i ap detected\n", num);
-    WebSerial.println("---AP List---");
+    //WebSerial.printf("%i ap detected\n", num);
+    //WebSerial.println("---AP List---");
     if(num > 0) {
         for(int i = 0; i < num; i++) {
-                WebSerial.print(i+1);
-                WebSerial.print(". ");
-                WebSerial.println(ssidList[i]);
+                //WebSerial.print(i+1);
+                //WebSerial.print(". ");
+                //WebSerial.println(ssidList[i]);
             }
-        WebSerial.println();
+        //WebSerial.println();
     }
     else {
-        WebSerial.println("No Access Points Detected.");
+        //WebSerial.println("No Access Points Detected.");
     }
     
 }
@@ -271,10 +254,10 @@ void printSSIDWeb() {
 void selectAP(uint8_t *data, size_t len) {
     for(int i = 0; i < len; i++) {
         if(data[i] == 20) {
-            WebSerial.println("Space found"); //placeholder
+            //WebSerial.println("Space found"); //placeholder
         }
         else {
-            WebSerial.println("No space detected");
+            //WebSerial.println("No space detected");
         }
     }
 }
@@ -288,18 +271,18 @@ void listClients() {
     int clientCount = apInfo.getClientCount(selectedAP);
     uint8_t clientMac[6];
 
-    WebSerial.println("---Client list---");
-    WebSerial.println(ssidList[selectedAP]);
+    //WebSerial.println("---Client list---");
+    //WebSerial.println(ssidList[selectedAP]);
     int i = 0;
     bool cont = true;
 
     do {
         apInfo.getClient(clientMac, selectedAP, i);
         if(clientCount > 0) {
-            WebSerial.printf("  %i. %x:%x:%x:%x:%x:%x\n", i+1, clientMac[0], clientMac[1], clientMac[2], clientMac[3], clientMac[4], clientMac[5]);
+            //WebSerial.printf("  %i. %x:%x:%x:%x:%x:%x\n", i+1, clientMac[0], clientMac[1], clientMac[2], clientMac[3], clientMac[4], clientMac[5]);
         }
         else {
-            WebSerial.println("No Clients Found.");
+            //WebSerial.println("No Clients Found.");
         }
         Serial.println(i);
 
@@ -311,8 +294,8 @@ void listClients() {
             i=0;
             
             if(selectedAP < num) {
-                WebSerial.print("\n\n");
-                WebSerial.println(ssidList[selectedAP]);
+                //WebSerial.print("\n\n");
+                //WebSerial.println(ssidList[selectedAP]);
             }
             else if(selectedAP >= num) {
                 cont = false;
@@ -323,75 +306,6 @@ void listClients() {
         delay(100);
     } while(cont == true);
     
-}
-
-
-void recvMsg(uint8_t *data, size_t len) {
-    if(len <= cmdLen) {
-        char cmd[2][len]; //command and flags are stored in seperate parts of the array
-        int flagsExist = 0;
-        int divider; //location of space in command 
-
-        //convert command to lowercase 
-        for(int i = 0; i < len; i++) {
-            //check if commanad has additional flags
-            if(cmd[flagsExist][i] == 20 && flagsExist != 1) {
-                flagsExist = 1;
-                divider = i+1;
-            }
-            else if(flagsExist == 0) {
-                cmd[flagsExist][i] = tolower(data[i]);
-            }
-            else if(flagsExist == 1) {
-                cmd[flagsExist][i-divider] = tolower(data[i]);
-                WebSerial.println(i-divider);
-            }
-        }
-        
-
-        int cmdInt = getCommand(cmd[0], len);
-
-        switch(cmdInt) {
-            case 0:
-                WebSerial.println("Help dialog placeholder");
-                break;
-
-            case 1:
-                configurePromisc(0); //init scan for AP
-                WebSerial.println("Starting AP scan");
-                switchChan = 1;
-                channel = 1;
-                break;
-
-            case 2:
-                esp_wifi_set_promiscuous(false); //stop ap scan
-                WebSerial.println("Stopping scan");
-                switchChan = 0;
-                break;
-
-            case 3:
-                configurePromisc(1); //start client scan
-                WebSerial.println("Starting Client scan");
-                switchChan = 2;
-                channel = 0;
-                break;
-
-            case 4:
-                printSSIDWeb(); //print access points
-                break;
-
-            case 5:
-                listClients();
-                break;
-
-            case 6:
-                selectAP(data, len);
-                break;
-
-            default:
-                WebSerial.println("[ERROR] Command not found");
-        }
-    }
 }
 
 
@@ -422,12 +336,14 @@ void setup()
         }
     }
 
+    bleTerm.begin();
+
     //Setup serial webpage
-    WebSerial.begin(&Server);
-    WebSerial.msgCallback(recvMsg);
-    Server.begin();
-    Serial.print("IP Address: ");
-    Serial.println(WiFi.softAPIP());
+    //WebSerial.begin(&Server);
+    //WebSerial.msgCallback(recvMsg);
+    //Server.begin();
+    //Serial.print("IP Address: ");
+    //Serial.println(WiFi.softAPIP());
 
     //rm67162_init(); // amoled lcd initialization
 
@@ -494,9 +410,84 @@ void setup()
 }
 
 
+void configState(int newCmd) {
+    if(newCmd != lastCmd) {
+        lastCmd = newCmd;
+        switch(lastCmd) {
+            case 0: {
+                char msg[] = "Help placeholder";
+                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
+                bleTerm.sendMsg(msg, msgSize);
+                break;
+            }
+            case 1: {
+                configurePromisc(0); //init scan for AP
+                char msg[] = "Starting AP Scan";
+                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
+                bleTerm.sendMsg(msg, msgSize);
+                break;
+            }
+            case 2: {
+                char msg[] = "Stopping Scan";
+                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
+                bleTerm.sendMsg(msg, msgSize);
+                esp_wifi_set_promiscuous(false); //stop ap scan
+                switchChan = 0;
+                break;
+            }
+            case 3: {
+                char msg[] = "Staring Client Scan";
+                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
+                bleTerm.sendMsg(msg, msgSize);
+                configurePromisc(1); //start client scan
+                switchChan = 2;
+                channel = 0;
+                break;
+            }
+            case 4: {
+                char msg[] = "Listing AP";
+                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
+                bleTerm.sendMsg(msg, msgSize);
+                //printSSIDWeb(); //print access points
+                break;
+            }
+            case 5: {
+                char msg[] = "Listing Clients";
+                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
+                bleTerm.sendMsg(msg, msgSize);
+                //listClients();
+                break;
+            }
+            case 6: {
+                char msg[] = "Select AP";
+                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
+                bleTerm.sendMsg(msg, msgSize);
+                //selectAP(data, len);
+                break;
+            }
+            default: {
+                char msg[] = "[Error] Command Not Found";
+                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
+                bleTerm.sendMsg(msg, msgSize);
+            }
+        }
+    }
+}
+
+
 void loop()
 {
     int curChannel = channel;
+
+    //Check command send over BLE
+    int getCmd = bleTerm.getLastCommand();
+    //If there are no device connected, start advertising
+    if(getCmd == 0) {
+        delay(500);
+        bleTerm.startAdvertising();
+    }
+    configState(bleTerm.getLastCommand());
+
     switch(switchChan) {
         case 1: //Scan for ap on all channels
             if(millis() - curTime > 1000) {
@@ -530,10 +521,6 @@ void loop()
                 }
                 curTime = millis();
             }
-
-        
-
-        
     }
     //lv_timer_handler();
     delay(500);
