@@ -163,8 +163,7 @@ void wifiCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
             break;
         case WIFI_PKT_DATA:
             Serial.print("Data pkt first byte: ");
-            Serial.println(mgmtPacket->payload[0]);
-            if(mgmtPacket->payload[0] == 8) {
+            if(mgmtPacket->payload[0] != 200) {
                 Serial.println("Data pkt");
                 scanForClient(mgmtPacket);
             }
@@ -291,13 +290,11 @@ void listClients() {
 
     WebSerial.println("---Client list---");
     WebSerial.println(ssidList[selectedAP]);
-    //WebSerial.printf("Current clients: %i\n", clientCount);
     int i = 0;
     bool cont = true;
 
-    while(cont == true) {
+    do {
         apInfo.getClient(clientMac, selectedAP, i);
-        //Serial.println("While loop test");
         if(clientCount > 0) {
             WebSerial.printf("  %i. %x:%x:%x:%x:%x:%x\n", i+1, clientMac[0], clientMac[1], clientMac[2], clientMac[3], clientMac[4], clientMac[5]);
         }
@@ -312,18 +309,19 @@ void listClients() {
             selectedAP++;
             clientCount = apInfo.getClientCount(selectedAP);
             i=0;
-            WebSerial.print("\n\n");
-            WebSerial.println(ssidList[selectedAP]);
-            //WebSerial.printf("Current clients: %i\n", clientCount);
             
-            if(selectedAP >= num) {
+            if(selectedAP < num) {
+                WebSerial.print("\n\n");
+                WebSerial.println(ssidList[selectedAP]);
+            }
+            else if(selectedAP >= num) {
                 cont = false;
             }
         }
 
 
         delay(100);
-    }
+    } while(cont == true);
     
 }
 
@@ -362,6 +360,7 @@ void recvMsg(uint8_t *data, size_t len) {
                 configurePromisc(0); //init scan for AP
                 WebSerial.println("Starting AP scan");
                 switchChan = 1;
+                channel = 1;
                 break;
 
             case 2:
@@ -373,7 +372,8 @@ void recvMsg(uint8_t *data, size_t len) {
             case 3:
                 configurePromisc(1); //start client scan
                 WebSerial.println("Starting Client scan");
-                switchChan = 1;
+                switchChan = 2;
+                channel = 0;
                 break;
 
             case 4:
@@ -497,23 +497,40 @@ void setup()
 void loop()
 {
     int curChannel = channel;
-    if(switchChan == 1) {
+    switch(switchChan) {
+        case 1: //Scan for ap on all channels
+            if(millis() - curTime > 1000) {
+                if(channel <= 11) {
+                    channel++;
+                    esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+                }
+                else {
+                    channel = 1;
+                    esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+                }
+                curTime = millis();
+            }
+        
+            if(curChannel != channel) {
+                Serial.printf("Current Channel: %i\n", channel);
+            }
+            break;
+        case 2: //Scan for clients only on channels ap's have been discovered on
+            int apNum = apInfo.getNumAP();
 
-        if(millis() - curTime > 1000) {
-            if(channel <= 11) {
-                channel++;
-                esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+            if(millis() - curTime > 1000) {
+                if(channel < apNum) {
+                    esp_wifi_set_channel(apInfo.getChannel(channel), WIFI_SECOND_CHAN_NONE);
+                    channel++;
+                    Serial.printf("Current Channel: %i\n", channel);
+                }
+                else {
+                    channel = 0;
+                    esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+                }
+                curTime = millis();
             }
-            else {
-                channel = 1;
-                esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
-            }
-            curTime = millis();
-        }
-    
-        if(curChannel != channel) {
-            Serial.printf("Current Channel: %i\n", channel);
-        }
+
         
 
         
