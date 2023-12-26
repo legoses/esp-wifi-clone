@@ -74,12 +74,13 @@ void BLETerm::begin() {
     pServer->setCallbacks(new MyServerCallbacks());
     //create ble service
     BLEService *pService = pServer->createService(SERVICE_UUID);
+    //Create characteristic
     pTxCharacteristic = pService->createCharacteristic(
         CHARACTERISTIC_UUID_TX,
         BLECharacteristic::PROPERTY_NOTIFY
         );
-
     pTxCharacteristic->addDescriptor(new BLE2902());
+
     BLECharacteristic *pRxCharacteristic = pService->createCharacteristic(
         CHARACTERISTIC_UUID_RX,
         BLECharacteristic::PROPERTY_WRITE

@@ -51,7 +51,7 @@ int channel = 1;
 unsigned long curTime = millis();
 //Stage. 0 is scanning for beacons. 1 is scannign for clients
 int currentMode = 0;
-int lastCmd;
+int lastCmd = -1;
 
 //Store info on scanned AP
 APInfo apInfo;
@@ -335,7 +335,7 @@ void setup()
             delay(500);
         }
     }
-
+    Serial.println("Starting bluetooth");
     bleTerm.begin();
 
     //Setup serial webpage
@@ -477,16 +477,21 @@ void configState(int newCmd) {
 
 void loop()
 {
+    Serial.println("Serial test");
     int curChannel = channel;
 
     //Check command send over BLE
     int getCmd = bleTerm.getLastCommand();
     //If there are no device connected, start advertising
+    Serial.println("Starting advertising");
     if(getCmd == 0) {
         delay(500);
         bleTerm.startAdvertising();
     }
-    configState(bleTerm.getLastCommand());
+    Serial.println("Getting last command");
+    if(getCmd != -1) {
+        configState(getCmd);
+    }
 
     switch(switchChan) {
         case 1: //Scan for ap on all channels
