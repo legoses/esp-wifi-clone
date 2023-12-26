@@ -477,19 +477,25 @@ void configState(int newCmd) {
 
 void loop()
 {
-    Serial.println("Serial test");
     int curChannel = channel;
+    bleTerm.connectionStatus();
 
     //Check command send over BLE
     int getCmd = bleTerm.getLastCommand();
     //If there are no device connected, start advertising
-    Serial.println("Starting advertising");
+    Serial.print("Last Command");
+    Serial.println(getCmd);
     if(getCmd == 0) {
+        Serial.println("Device Disconnected");
         delay(500);
         bleTerm.startAdvertising();
     }
     Serial.println("Getting last command");
+    if(getCmd == 1) {
+        Serial.println("New device connected");
+    }
     if(getCmd != -1) {
+        Serial.println("Default");
         configState(getCmd);
     }
 

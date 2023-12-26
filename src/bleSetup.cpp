@@ -95,18 +95,21 @@ void BLETerm::begin() {
 
 void BLETerm::startAdvertising() {
         pServer->startAdvertising();
-        oldDeviceConnected = deviceConnected;
 }
 
 int BLETerm::connectionStatus() {
     //Check for disconnected
     if(!deviceConnected && oldDeviceConnected) {
+        oldDeviceConnected = deviceConnected;
         return 0;
     }
     //Check for new connection
     if(deviceConnected && !oldDeviceConnected) {
         oldDeviceConnected = deviceConnected;
         return 1;
+    }
+    if(deviceConnected) {
+        return 2;
     }
 
     return -1;
