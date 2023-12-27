@@ -11,7 +11,8 @@
 //#include <WebServer.h>
 //#include <WebSerial.h>
 #include <spoofAP.h>
-#include <bleSetup.h>
+//#include <bleSetup.h>
+#include <BLEControl.h>
 
 
 #if ARDUINO_USB_CDC_ON_BOOT != 1
@@ -32,7 +33,6 @@ const char *CONFIG_SSID = "hello";
 const char *CONFIG_PASS = "hellowifitest";
 int switchChan = 0;
 
-const int cmdLen = 32;
 //function comparing client command to this array will return int containing the command position in the array
 //Int will be used in switch case to determing next step
 
@@ -57,7 +57,7 @@ int lastCmd = -1;
 APInfo apInfo;
 SpoofAP spoofAP;
 //Setup BLE
-BLETerm bleTerm;
+BLETerm *bleTerm;
 
 wifi_init_config_t config = WIFI_INIT_CONFIG_DEFAULT();
 wifi_promiscuous_filter_t filter;
@@ -336,7 +336,8 @@ void setup()
         }
     }
     Serial.println("Starting bluetooth");
-    bleTerm.begin();
+    setupBLE(bleTerm);
+    ////bleTerm.begin();
 
     //Setup serial webpage
     //WebSerial.begin(&Server);
@@ -417,20 +418,20 @@ void configState(int newCmd) {
             case 0: {
                 char msg[] = "Help placeholder";
                 size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                bleTerm.sendMsg(msg, msgSize);
+                //bleTerm.sendMsg(msg, msgSize);
                 break;
             }
             case 1: {
                 configurePromisc(0); //init scan for AP
                 char msg[] = "Starting AP Scan";
                 size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                bleTerm.sendMsg(msg, msgSize);
+                //bleTerm.sendMsg(msg, msgSize);
                 break;
             }
             case 2: {
                 char msg[] = "Stopping Scan";
                 size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                bleTerm.sendMsg(msg, msgSize);
+                //bleTerm.sendMsg(msg, msgSize);
                 esp_wifi_set_promiscuous(false); //stop ap scan
                 switchChan = 0;
                 break;
@@ -438,7 +439,7 @@ void configState(int newCmd) {
             case 3: {
                 char msg[] = "Staring Client Scan";
                 size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                bleTerm.sendMsg(msg, msgSize);
+                //bleTerm.sendMsg(msg, msgSize);
                 configurePromisc(1); //start client scan
                 switchChan = 2;
                 channel = 0;
@@ -447,28 +448,28 @@ void configState(int newCmd) {
             case 4: {
                 char msg[] = "Listing AP";
                 size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                bleTerm.sendMsg(msg, msgSize);
+                //bleTerm.sendMsg(msg, msgSize);
                 //printSSIDWeb(); //print access points
                 break;
             }
             case 5: {
                 char msg[] = "Listing Clients";
                 size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                bleTerm.sendMsg(msg, msgSize);
+                //bleTerm.sendMsg(msg, msgSize);
                 //listClients();
                 break;
             }
             case 6: {
                 char msg[] = "Select AP";
                 size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                bleTerm.sendMsg(msg, msgSize);
+                //bleTerm.sendMsg(msg, msgSize);
                 //selectAP(data, len);
                 break;
             }
             default: {
                 char msg[] = "[Error] Command Not Found";
                 size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                bleTerm.sendMsg(msg, msgSize);
+                //bleTerm.sendMsg(msg, msgSize);
             }
         }
     }
@@ -478,17 +479,17 @@ void configState(int newCmd) {
 void loop()
 {
     int curChannel = channel;
-    bleTerm.connectionStatus();
+    //bleTerm.connectionStatus();
 
     //Check command send over BLE
-    int getCmd = bleTerm.getLastCommand();
+    int getCmd = -1;//bleTerm.getLastCommand();
     //If there are no device connected, start advertising
     Serial.print("Last Command");
     Serial.println(getCmd);
     if(getCmd == 0) {
         Serial.println("Device Disconnected");
         delay(500);
-        bleTerm.startAdvertising();
+        //bleTerm.startAdvertising();
     }
     Serial.println("Getting last command");
     if(getCmd == 1) {

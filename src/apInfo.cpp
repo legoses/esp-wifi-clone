@@ -1,6 +1,5 @@
 #include <apInfo.h>
 
-
 APInfo::APInfo() {
     //Init variable
     this->curNum = 0;
