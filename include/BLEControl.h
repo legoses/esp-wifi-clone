@@ -31,6 +31,7 @@ class BLETerm {
 
     void setLastCommand(int cmd);
     int getLastCommad();
+    void configState(int newCmd);
 };
 
 class MyServerCallbacks : public BLEServerCallbacks, public BLETerm {

@@ -411,71 +411,6 @@ void setup()
 }
 
 
-void configState(int newCmd) {
-    if(newCmd != lastCmd) {
-        lastCmd = newCmd;
-        switch(lastCmd) {
-            case 0: {
-                char msg[] = "Help placeholder";
-                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                //bleTerm.sendMsg(msg, msgSize);
-                break;
-            }
-            case 1: {
-                configurePromisc(0); //init scan for AP
-                char msg[] = "Starting AP Scan";
-                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                //bleTerm.sendMsg(msg, msgSize);
-                break;
-            }
-            case 2: {
-                char msg[] = "Stopping Scan";
-                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                //bleTerm.sendMsg(msg, msgSize);
-                esp_wifi_set_promiscuous(false); //stop ap scan
-                switchChan = 0;
-                break;
-            }
-            case 3: {
-                char msg[] = "Staring Client Scan";
-                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                //bleTerm.sendMsg(msg, msgSize);
-                configurePromisc(1); //start client scan
-                switchChan = 2;
-                channel = 0;
-                break;
-            }
-            case 4: {
-                char msg[] = "Listing AP";
-                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                //bleTerm.sendMsg(msg, msgSize);
-                //printSSIDWeb(); //print access points
-                break;
-            }
-            case 5: {
-                char msg[] = "Listing Clients";
-                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                //bleTerm.sendMsg(msg, msgSize);
-                //listClients();
-                break;
-            }
-            case 6: {
-                char msg[] = "Select AP";
-                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                //bleTerm.sendMsg(msg, msgSize);
-                //selectAP(data, len);
-                break;
-            }
-            default: {
-                char msg[] = "[Error] Command Not Found";
-                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                //bleTerm.sendMsg(msg, msgSize);
-            }
-        }
-    }
-}
-
-
 void loop()
 {
     int curChannel = channel;
@@ -497,7 +432,7 @@ void loop()
     }
     if(getCmd != -1) {
         Serial.println("Default");
-        configState(getCmd);
+        //configState(getCmd);
     }
 
     switch(switchChan) {

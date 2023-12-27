@@ -37,6 +37,71 @@ int BLETerm::getLastCommad() {
     return this->lastCommand;
 }
 
+/*
+void BLETerm::configState(int newCmd) {
+    if(newCmd != this->lastCommand) {
+        this->lastCommand = newCmd;
+        switch(newCmd) {
+            case 0: {
+                char msg[] = "Help placeholder";
+                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
+                //bleTerm.sendMsg(msg, msgSize);
+                break;
+            }
+            case 1: {
+                configurePromisc(0); //init scan for AP
+                char msg[] = "Starting AP Scan";
+                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
+                //bleTerm.sendMsg(msg, msgSize);
+                break;
+            }
+            case 2: {
+                char msg[] = "Stopping Scan";
+                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
+                //bleTerm.sendMsg(msg, msgSize);
+                esp_wifi_set_promiscuous(false); //stop ap scan
+                switchChan = 0;
+                break;
+            }
+            case 3: {
+                char msg[] = "Staring Client Scan";
+                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
+                //bleTerm.sendMsg(msg, msgSize);
+                configurePromisc(1); //start client scan
+                switchChan = 2;
+                channel = 0;
+                break;
+            }
+            case 4: {
+                char msg[] = "Listing AP";
+                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
+                //bleTerm.sendMsg(msg, msgSize);
+                //printSSIDWeb(); //print access points
+                break;
+            }
+            case 5: {
+                char msg[] = "Listing Clients";
+                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
+                //bleTerm.sendMsg(msg, msgSize);
+                //listClients();
+                break;
+            }
+            case 6: {
+                char msg[] = "Select AP";
+                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
+                //bleTerm.sendMsg(msg, msgSize);
+                //selectAP(data, len);
+                break;
+            }
+            default: {
+                char msg[] = "[Error] Command Not Found";
+                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
+                //bleTerm.sendMsg(msg, msgSize);
+            }
+        }
+    }
+}
+*/
 void MyServerCallbacks::onConnect(BLEServer *pServer) {
     setDeviceConnected(true);
 }
@@ -50,7 +115,6 @@ void MyCallbacks::onWrite(BLECharacteristic *pCharacteristic) {
     int rxValueLen = strlen(rxValue);
 
     if(rxValueLen > 0) {
-        Serial.println(rxValue);
         char cmd[2][rxValueLen];
         int flagsExist = 0;
         int divider;
@@ -62,16 +126,16 @@ void MyCallbacks::onWrite(BLECharacteristic *pCharacteristic) {
                 flagsExist = 1;
                 divider = i+1;
             }
-            else if(flagsExist == 0) {
+            //Get rid of control characters such as line breaks
+            else if(flagsExist == 0 && rxValue[i] > 31) {
                 cmd[flagsExist][i] = tolower(rxValue[i]);
             }
-            else if(flagsExist == 1) {
+            else if(flagsExist == 1 && rxValue[i] > 31) {
                 cmd[flagsExist][i-divider] = tolower(rxValue[i]);
             }
         }
-
-        //record last command
-        //DeviceStatus::setCommand(getCommand(cmd[0], rxValueLen));
+        Serial.println(rxValue);
+        Serial.println(cmd[0]);
     }
 }
 
