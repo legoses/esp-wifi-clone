@@ -57,7 +57,7 @@ int lastCmd = -1;
 APInfo apInfo;
 SpoofAP spoofAP;
 //Setup BLE
-BLETerm *bleTerm;
+BLETerm bleTerm;
 
 wifi_init_config_t config = WIFI_INIT_CONFIG_DEFAULT();
 wifi_promiscuous_filter_t filter;

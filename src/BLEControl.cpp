@@ -50,6 +50,7 @@ void MyCallbacks::onWrite(BLECharacteristic *pCharacteristic) {
     int rxValueLen = strlen(rxValue);
 
     if(rxValueLen > 0) {
+        Serial.println(rxValue);
         char cmd[2][rxValueLen];
         int flagsExist = 0;
         int divider;
@@ -74,40 +75,59 @@ void MyCallbacks::onWrite(BLECharacteristic *pCharacteristic) {
     }
 }
 
+
 void handleBLEConnection(void *pvParameter) {
     BLETerm bleTerm = *((BLETerm*)pvParameter);
+    uint8_t txVal = 1;
     while(true) {
-        Serial.print("Device Connected: ");
-        Serial.println(bleTerm.getDeviceConnected());
-        delay(100);
+        bool device = bleTerm.getDeviceConnected();
+        bool oldDevice = bleTerm.getOldDeviceConnected();
+
+        if(!device && oldDevice) {
+            bleTerm.pServer->startAdvertising();
+            Serial.println("Start advertising");
+            bleTerm.setOldDeviceConnected(device);
+        }
+
+        if(device && !oldDevice) {
+            bleTerm.setOldDeviceConnected(device);
+        }
+        delay(1000);
     }
 }
 
-void setupBLE(BLETerm *bleTerm) { 
+void setupBLE(BLETerm &bleTerm) { 
+    Serial.println("Ble init");
     BLEDevice::init("BLE Device");
 
-    bleTerm->pServer = BLEDevice::createServer();
-    bleTerm->pServer->setCallbacks(new MyServerCallbacks());
+    Serial.println("Creating ble server");
+    bleTerm.pServer = BLEDevice::createServer();
+    Serial.println("Setting server callback");
+    bleTerm.pServer->setCallbacks(new MyServerCallbacks());
     //create ble service
-    BLEService *pService = bleTerm->pServer->createService(SERVICE_UUID);
+    Serial.println("Creating ble service");
+    BLEService *pService = bleTerm.pServer->createService(SERVICE_UUID);
     //Create characteristic
-    bleTerm->pTxCharacteristic = pService->createCharacteristic(
+    Serial.println("Creating ble characteristic");
+    bleTerm.pTxCharacteristic = pService->createCharacteristic(
         CHARACTERISTIC_UUID_TX,
         BLECharacteristic::PROPERTY_NOTIFY
         );
-    bleTerm->pTxCharacteristic->addDescriptor(new BLE2902());
+    bleTerm.pTxCharacteristic->addDescriptor(new BLE2902());
 
     BLECharacteristic *pRxCharacteristic = pService->createCharacteristic(
         CHARACTERISTIC_UUID_RX,
         BLECharacteristic::PROPERTY_WRITE
     );
 
+    Serial.println("Setting callvbacks");
     pRxCharacteristic->setCallbacks(new MyCallbacks());
     //Start service
     pService->start();
     //Start advertising
-    bleTerm->pServer->getAdvertising()->start();
+    bleTerm.pServer->getAdvertising()->start();
 
+    Serial.println("Creating task");
     //start thread to handle ble
     xTaskCreate(
         handleBLEConnection,
