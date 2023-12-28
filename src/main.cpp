@@ -29,8 +29,6 @@
 */
 
 //configure AP
-const char *CONFIG_SSID = "hello";
-const char *CONFIG_PASS = "hellowifitest";
 int switchChan = 0;
 
 //function comparing client command to this array will return int containing the command position in the array
@@ -51,7 +49,6 @@ int channel = 1;
 unsigned long curTime = millis();
 //Stage. 0 is scanning for beacons. 1 is scannign for clients
 int currentMode = 0;
-int lastCmd = -1;
 
 //Store info on scanned AP
 APInfo apInfo;
@@ -166,13 +163,6 @@ void wifiCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
             break;
     }
 }
-void configAP() {
-    if(!WiFi.softAP(CONFIG_SSID, CONFIG_PASS)) {
-        while(1) {
-            Serial.println("Config fialed");
-        }
-    }
-}
 
 /*
     Make this function disable wifi if it is already enabled
@@ -229,19 +219,33 @@ void configurePromisc(int filterMask) {
     }
 }
 
+void sendMsg(char msg[]) {
+    bleTerm.pTxCharacteristic->setValue(msg);
+    bleTerm.pTxCharacteristic->notify();
+}
 
 void printSSIDWeb() {
     int num = apInfo.getNumAP();
     char **ssidList = apInfo.getSSID();
 
-    //WebSerial.printf("%i ap detected\n", num);
     //WebSerial.println("---AP List---");
+    char msg[] = "---AP List---";
+    sendMsg(msg);
+    int totalLen = apInfo.SSID_LEN;
     if(num > 0) {
         for(int i = 0; i < num; i++) {
-                //WebSerial.print(i+1);
-                //WebSerial.print(". ");
-                //WebSerial.println(ssidList[i]);
+            char apMsg[40];
+            apMsg[0] = i+1;
+            apMsg[1] = '.';
+            apMsg[2] = ' ';
+
+
+            int ssidLen = strlen(ssidList[i]);
+            if(ssidLen < totalLen) {
+                strncat(apMsg, ssidList[i], ssidLen);
+                sendMsg(apMsg);
             }
+        }
         //WebSerial.println();
     }
     else {
@@ -319,8 +323,6 @@ void setup()
     //Serup wifi access point
     Serial.println("Setting up Config Access Point");
 
-    //Config web server
-    configAP();
     Serial.println("Configuring Wifi");
     if(configWifi() == -1) {
         while(true) {
@@ -411,29 +413,71 @@ void setup()
 }
 
 
+void configState() {
+    int cmd = bleTerm.getCommand();
+    Serial.printf("Command: %i\n", cmd);
+    if(cmd != -1) {
+        switch(cmd) {
+            case 0: {
+                char msg[] = "Placeholder Help Message";
+                sendMsg(msg);
+                break;
+            }
+            case 1: {
+                char msg[] = "Starting AP Scan";
+                configurePromisc(0); //init scan for AP
+                sendMsg(msg);
+                break;
+            }
+            case 2: {
+                char msg[] = "Stopping Scan";
+                sendMsg(msg);
+                esp_wifi_set_promiscuous(false); //stop ap scan
+                switchChan = 0;
+                break;
+            }
+            case 3: {
+                char msg[] = "Staring Client Scan";
+                sendMsg(msg);
+                configurePromisc(1); //start client scan
+                switchChan = 2;
+                channel = 0;
+                break;
+            }
+            case 4: {
+                char msg[] = "Listing AP";
+                sendMsg(msg);
+                //bleTerm.sendMsg(msg, msgSize);
+                printSSIDWeb(); //print access points
+                break;
+            }
+            case 5: {
+                char msg[] = "Listing Clients";
+                sendMsg(msg);
+                //listClients();
+                break;
+            }
+            case 6: {
+                char msg[] = "Select AP";
+                sendMsg(msg);
+                //selectAP(data, len);
+                break;
+            }
+            default: {
+                char msg[] = "[Error] Command Not Found";
+                sendMsg(msg);
+            }
+        }
+        bleTerm.resetCommand();
+    }
+}
+
 void loop()
 {
     int curChannel = channel;
     //bleTerm.connectionStatus();
 
-    //Check command send over BLE
-    int getCmd = -1;//bleTerm.getLastCommand();
-    //If there are no device connected, start advertising
-    Serial.print("Last Command");
-    Serial.println(getCmd);
-    if(getCmd == 0) {
-        Serial.println("Device Disconnected");
-        delay(500);
-        //bleTerm.startAdvertising();
-    }
-    Serial.println("Getting last command");
-    if(getCmd == 1) {
-        Serial.println("New device connected");
-    }
-    if(getCmd != -1) {
-        Serial.println("Default");
-        //configState(getCmd);
-    }
+    configState();
 
     switch(switchChan) {
         case 1: //Scan for ap on all channels

@@ -3,9 +3,9 @@
 
 char BLETerm::cmdArray[9][cmdLen] = {
     "help", //0
-    "scan-ap-start", //1 
+    "scan-ap", //1 
     "scan-stop", //2
-    "scan-client-start", //3
+    "scan-client", //3
     "list-ap", //4
     "list-clients", //5
     "select-ap", //6
@@ -14,13 +14,21 @@ char BLETerm::cmdArray[9][cmdLen] = {
     };
 bool BLETerm::deviceConnected = false;
 bool BLETerm::oldDeviceConnected = false;
-int BLETerm::lastCommand = -1;
+int BLETerm::curCommand = -1;
 
 void BLETerm::setDeviceConnected(bool status) {
     this->deviceConnected = status;
 }
 bool BLETerm::getDeviceConnected() {
     return this->deviceConnected;
+}
+
+int BLETerm::getCommand() {
+    return this->curCommand;
+}
+
+void BLETerm::resetCommand() {
+    this->curCommand = -1;
 }
 
 void BLETerm::setOldDeviceConnected(bool status) {
@@ -30,78 +38,19 @@ bool BLETerm::getOldDeviceConnected() {
     return this->oldDeviceConnected;
 }
 
-void BLETerm::setLastCommand(int cmd) {
-    this->lastCommand = cmd;
-}
-int BLETerm::getLastCommad() {
-    return this->lastCommand;
+void BLETerm::parseCommand(char cmd[], int len) {
+    for(int i = 0; i < 9; i++) {
+        if(memcmp(this->cmdArray[i], cmd, len-1) == 0) {
+            Serial.println("Match Found");
+            this->curCommand = i;
+            break;
+        }
+        else {
+            this->curCommand = -2; //value if command is not found
+        }
+    }    
 }
 
-/*
-void BLETerm::configState(int newCmd) {
-    if(newCmd != this->lastCommand) {
-        this->lastCommand = newCmd;
-        switch(newCmd) {
-            case 0: {
-                char msg[] = "Help placeholder";
-                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                //bleTerm.sendMsg(msg, msgSize);
-                break;
-            }
-            case 1: {
-                configurePromisc(0); //init scan for AP
-                char msg[] = "Starting AP Scan";
-                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                //bleTerm.sendMsg(msg, msgSize);
-                break;
-            }
-            case 2: {
-                char msg[] = "Stopping Scan";
-                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                //bleTerm.sendMsg(msg, msgSize);
-                esp_wifi_set_promiscuous(false); //stop ap scan
-                switchChan = 0;
-                break;
-            }
-            case 3: {
-                char msg[] = "Staring Client Scan";
-                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                //bleTerm.sendMsg(msg, msgSize);
-                configurePromisc(1); //start client scan
-                switchChan = 2;
-                channel = 0;
-                break;
-            }
-            case 4: {
-                char msg[] = "Listing AP";
-                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                //bleTerm.sendMsg(msg, msgSize);
-                //printSSIDWeb(); //print access points
-                break;
-            }
-            case 5: {
-                char msg[] = "Listing Clients";
-                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                //bleTerm.sendMsg(msg, msgSize);
-                //listClients();
-                break;
-            }
-            case 6: {
-                char msg[] = "Select AP";
-                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                //bleTerm.sendMsg(msg, msgSize);
-                //selectAP(data, len);
-                break;
-            }
-            default: {
-                char msg[] = "[Error] Command Not Found";
-                size_t msgSize = sizeof(msg) / sizeof(msg[0]);
-                //bleTerm.sendMsg(msg, msgSize);
-            }
-        }
-    }
-}
-*/
 void MyServerCallbacks::onConnect(BLEServer *pServer) {
     setDeviceConnected(true);
 }
@@ -114,6 +63,7 @@ void MyCallbacks::onWrite(BLECharacteristic *pCharacteristic) {
     const char *rxValue = pCharacteristic->getValue().c_str();
     int rxValueLen = strlen(rxValue);
 
+    Serial.println(rxValue);
     if(rxValueLen > 0) {
         char cmd[2][rxValueLen];
         int flagsExist = 0;
@@ -134,8 +84,7 @@ void MyCallbacks::onWrite(BLECharacteristic *pCharacteristic) {
                 cmd[flagsExist][i-divider] = tolower(rxValue[i]);
             }
         }
-        Serial.println(rxValue);
-        Serial.println(cmd[0]);
+        BLETerm::parseCommand(cmd[0], rxValueLen);
     }
 }
 

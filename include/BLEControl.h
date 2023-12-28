@@ -18,20 +18,23 @@ class BLETerm {
     static char cmdArray[9][cmdLen];
     static bool deviceConnected; 
     static bool oldDeviceConnected; 
-    static int lastCommand; 
+    static int curCommand;
 
     public:
     BLEServer *pServer = NULL;
     BLECharacteristic *pTxCharacteristic;
+    int getCommand();
+    void resetCommand();
+    
     void setDeviceConnected(bool status);
     bool getDeviceConnected();
     
     void setOldDeviceConnected(bool status);
     bool getOldDeviceConnected();
 
-    void setLastCommand(int cmd);
-    int getLastCommad();
     void configState(int newCmd);
+
+    void parseCommand(char cmd[], int len);
 };
 
 class MyServerCallbacks : public BLEServerCallbacks, public BLETerm {

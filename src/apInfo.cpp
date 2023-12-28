@@ -11,7 +11,7 @@ APInfo::APInfo() {
     this->SSID = (char**)malloc(numAP * sizeof(char*));
     for(int i = 0; i < this->numAP; i++)
     {
-        SSID[i] = (char*)malloc(32 * sizeof(char));
+        SSID[i] = (char*)malloc(this->SSID_LEN * sizeof(char));
     }
 }
 
@@ -100,13 +100,13 @@ int APInfo::checkClientExist(uint8_t client[], int ap) {
 
 //Check if bssid exists in array, and return position
 int APInfo::checkExisting(uint8_t bssid[]) {
-    Serial.print("Comparing BSSID ");
-    printBSSID(bssid);
+    //Serial.print("Comparing BSSID ");
+    //printBSSID(bssid);
     Serial.println("and:");
     for(int i = 0; i < this->curNum; i++) {
         //Check if bssid is already stored
-        printBSSID(this->BSSID[i]);
-        Serial.println();
+        //printBSSID(this->BSSID[i]);
+        //Serial.println();
         if(memcmp(bssid, this->BSSID[i], 6) == 0) {
             //Serial.println("Memcpy worked");
             return i;
@@ -122,7 +122,7 @@ uint8_t APInfo::getChannel(int num) {
 
 bool APInfo::addAP(char ssid[], uint8_t bssid[], signed rssi, uint8_t channel, int len) {
     //Make sure ssid length is 32 or less and number of stored AP is 10 or less
-    if(checkExisting(bssid) == -1 && len < 32 && this->curNum < 10 && len > 0) {
+    if(checkExisting(bssid) == -1 && len < this->SSID_LEN && this->curNum < 10 && len > 0) {
         //Copy information to class variabes
         copyInfo(this->SSID[curNum], ssid, len);
         copyInfo(this->BSSID[curNum], bssid, 6);

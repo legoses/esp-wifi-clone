@@ -20,6 +20,7 @@ class APInfo {
     void printBSSID(uint8_t bssid[]);
 
     public:
+    const int SSID_LEN = 32;
     APInfo();
     char **getSSID();
     uint8_t *getBSSID(int num);
