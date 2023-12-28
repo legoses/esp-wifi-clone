@@ -72,9 +72,10 @@ void MyCallbacks::onWrite(BLECharacteristic *pCharacteristic) {
         //convert command to lowercase 
         for(int i = 0; i < rxValueLen; i++) {
             //check if commanad has additional flags
-            if(cmd[flagsExist][i] == 20 && flagsExist != 1) {
+            if(cmd[flagsExist][i] == 20 && flagsExist != 1) { //switch to second array if flags exist
                 flagsExist = 1;
                 divider = i+1;
+                cmd[flagsExist][divider] = '\0'; //null character at end of string
             }
             //Get rid of control characters such as line breaks
             else if(flagsExist == 0 && rxValue[i] > 31) {
@@ -83,7 +84,12 @@ void MyCallbacks::onWrite(BLECharacteristic *pCharacteristic) {
             else if(flagsExist == 1 && rxValue[i] > 31) {
                 cmd[flagsExist][i-divider] = tolower(rxValue[i]);
             }
+
+            if(i == rxValueLen-1) {
+                cmd[flagsExist][i] = '\0'; //Add null to end of string
+            }
         }
+        Serial.println(cmd[0]);
         BLETerm::parseCommand(cmd[0], rxValueLen);
     }
 }

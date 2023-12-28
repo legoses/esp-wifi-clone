@@ -222,6 +222,7 @@ void configurePromisc(int filterMask) {
 void sendMsg(char msg[]) {
     bleTerm.pTxCharacteristic->setValue(msg);
     bleTerm.pTxCharacteristic->notify();
+    delay(10);
 }
 
 void printSSIDWeb() {
@@ -233,23 +234,27 @@ void printSSIDWeb() {
     sendMsg(msg);
     int totalLen = apInfo.SSID_LEN;
     if(num > 0) {
+        char apMsg[40];
+        memset(apMsg, '\0', 40);
         for(int i = 0; i < num; i++) {
-            char apMsg[40];
-            apMsg[0] = i+1;
+            apMsg[0] = i+49; //Convert to ascii number so it prints properly
             apMsg[1] = '.';
-            apMsg[2] = ' ';
+            apMsg[2] = 20;
 
 
             int ssidLen = strlen(ssidList[i]);
+            Serial.println(ssidList[i]);
             if(ssidLen < totalLen) {
-                strncat(apMsg, ssidList[i], ssidLen);
+                strcat(apMsg, ssidList[i]);
+                Serial.printf("Sending: %s\n", apMsg);
                 sendMsg(apMsg);
+                memset(apMsg, '\0', 40);
             }
         }
-        //WebSerial.println();
     }
     else {
-        //WebSerial.println("No Access Points Detected.");
+        char apMsg[] = "No Access Points Found.";
+        sendMsg(apMsg);
     }
     
 }
