@@ -38,6 +38,7 @@ bool BLETerm::getOldDeviceConnected() {
     return this->oldDeviceConnected;
 }
 
+//Match the command to the array
 void BLETerm::parseCommand(char cmd[], int len) {
     for(int i = 0; i < 9; i++) {
         if(memcmp(this->cmdArray[i], cmd, len-1) == 0) {
@@ -51,6 +52,14 @@ void BLETerm::parseCommand(char cmd[], int len) {
     }    
 }
 
+void BLETerm::setSpoofAP(int ap) {
+    this->spoofAP = ap;
+}
+
+int BLETerm::getSpoofAP() {
+    return this->spoofAP;
+}
+
 void MyServerCallbacks::onConnect(BLEServer *pServer) {
     setDeviceConnected(true);
 }
@@ -59,41 +68,42 @@ void MyServerCallbacks::onDisconnect(BLEServer *pServer) {
     setDeviceConnected(false);
 }
 
+//I fucked up the command handling, but don't feel like redoing it, so its going to be clunky
 void MyCallbacks::onWrite(BLECharacteristic *pCharacteristic) {
     const char *rxValue = pCharacteristic->getValue().c_str();
     int rxValueLen = strlen(rxValue);
 
     Serial.println(rxValue);
     if(rxValueLen > 0) {
-        char cmd[2][rxValueLen];
+        char cmd[rxValueLen];
         int flagsExist = 0;
         int divider;
         
         //convert command to lowercase 
         for(int i = 0; i < rxValueLen; i++) {
             //check if commanad has additional flags
-            if(cmd[flagsExist][i] == 20 && flagsExist != 1) { //switch to second array if flags exist
+            if(cmd[i] == 20 && flagsExist != 1) { //switch to second array if flags exist
                 flagsExist = 1;
                 divider = i+1;
-                cmd[flagsExist][divider] = '\0'; //null character at end of string
             }
             //Get rid of control characters such as line breaks
             else if(flagsExist == 0 && rxValue[i] > 31) {
-                cmd[flagsExist][i] = tolower(rxValue[i]);
-            }
-            else if(flagsExist == 1 && rxValue[i] > 31) {
-                cmd[flagsExist][i-divider] = tolower(rxValue[i]);
+                cmd[i] = tolower(rxValue[i]);
             }
 
             if(i == rxValueLen-1) {
-                cmd[flagsExist][i] = '\0'; //Add null to end of string
+                cmd[i] = '\0'; //Add null to end of string
             }
         }
-        Serial.println(cmd[0]);
-        BLETerm::parseCommand(cmd[0], rxValueLen);
+        Serial.println(cmd);
+        if(flagsExist == 0) {
+            BLETerm::parseCommand(cmd, rxValueLen);
+        }
+        else {
+            BLETerm::parseCommand(cmd, rxValueLen, divider);
+        }
     }
 }
-
 
 void handleBLEConnection(void *pvParameter) {
     BLETerm bleTerm = *((BLETerm*)pvParameter);

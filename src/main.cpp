@@ -239,7 +239,7 @@ void printSSIDWeb() {
         for(int i = 0; i < num; i++) {
             apMsg[0] = i+49; //Convert to ascii number so it prints properly
             apMsg[1] = '.';
-            apMsg[2] = 20;
+            apMsg[2] = 20; //space character
 
 
             int ssidLen = strlen(ssidList[i]);
@@ -280,19 +280,35 @@ void listClients() {
     int clientCount = apInfo.getClientCount(selectedAP);
     uint8_t clientMac[6];
 
-    //WebSerial.println("---Client list---");
-    //WebSerial.println(ssidList[selectedAP]);
+    char msg[] = "---Client List---";
+    sendMsg(msg);
+    sendMsg(ssidList[selectedAP]);
     int i = 0;
     bool cont = true;
 
+    char clientMsg[20];
+    memset(clientMsg, '\0', 20);
     do {
+        //apMsg[0] = i+49; //Convert to ascii number so it prints properly
+        //apMsg[1] = '.';
+        //apMsg[2] = 20; //space character
         apInfo.getClient(clientMac, selectedAP, i);
         if(clientCount > 0) {
-            //WebSerial.printf("  %i. %x:%x:%x:%x:%x:%x\n", i+1, clientMac[0], clientMac[1], clientMac[2], clientMac[3], clientMac[4], clientMac[5]);
+            snprintf(clientMsg, 20, "%i. %x:%x:%x:%x:%x:%x", 
+            i+1, 
+            clientMac[0], 
+            clientMac[1], 
+            clientMac[2], 
+            clientMac[3], 
+            clientMac[4], 
+            clientMac[5]
+            );
         }
         else {
             //WebSerial.println("No Clients Found.");
+            snprintf(clientMsg, 20, "No Clients Found.");
         }
+        sendMsg(clientMsg);
         Serial.println(i);
 
         i++;
@@ -304,7 +320,7 @@ void listClients() {
             
             if(selectedAP < num) {
                 //WebSerial.print("\n\n");
-                //WebSerial.println(ssidList[selectedAP]);
+                sendMsg(ssidList[selectedAP]);
             }
             else if(selectedAP >= num) {
                 cont = false;
@@ -459,7 +475,7 @@ void configState() {
             case 5: {
                 char msg[] = "Listing Clients";
                 sendMsg(msg);
-                //listClients();
+                listClients();
                 break;
             }
             case 6: {

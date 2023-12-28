@@ -19,6 +19,8 @@ class BLETerm {
     static bool deviceConnected; 
     static bool oldDeviceConnected; 
     static int curCommand;
+    char command[];
+    static int spoofAP;
 
     public:
     BLEServer *pServer = NULL;
@@ -35,6 +37,9 @@ class BLETerm {
     void configState(int newCmd);
 
     void parseCommand(char cmd[], int len);
+    void parseCommand(char cmd[], int len, int divider);
+    void setSpoofAP(int ap);
+    void getSpoofAP();
 };
 
 class MyServerCallbacks : public BLEServerCallbacks, public BLETerm {
