@@ -14,12 +14,13 @@
 #define CHARACTERISTIC_UUID_TX "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
 
 class BLETerm {
+    const static int INPUT_MAX_LEN = 100;
     const static int cmdLen = 32;
     static char cmdArray[9][cmdLen];
     static bool deviceConnected; 
     static bool oldDeviceConnected; 
     static int curCommand;
-    char command[];
+    static char command[INPUT_MAX_LEN];
     static int spoofAP;
 
     public:
@@ -27,6 +28,7 @@ class BLETerm {
     BLECharacteristic *pTxCharacteristic;
     int getCommand();
     void resetCommand();
+    char *getFullCommand();
     
     void setDeviceConnected(bool status);
     bool getDeviceConnected();
@@ -37,9 +39,8 @@ class BLETerm {
     void configState(int newCmd);
 
     void parseCommand(char cmd[], int len);
-    void parseCommand(char cmd[], int len, int divider);
     void setSpoofAP(int ap);
-    void getSpoofAP();
+    int getSpoofAP();
 };
 
 class MyServerCallbacks : public BLEServerCallbacks, public BLETerm {

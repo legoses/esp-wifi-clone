@@ -260,15 +260,16 @@ void printSSIDWeb() {
 }
 
 
-void selectAP(uint8_t *data, size_t len) {
-    for(int i = 0; i < len; i++) {
-        if(data[i] == 20) {
-            //WebSerial.println("Space found"); //placeholder
-        }
-        else {
-            //WebSerial.println("No space detected");
-        }
-    }
+void selectAP() {
+
+    //flag should start on index 10
+    char *cmd = bleTerm.getFullCommand();
+    char **ssidList = apInfo.getSSID();
+
+    int apSelect = cmd[11];
+    char msg[30];
+    snprintf(msg, 30, "AP '%s' Selected.", ssidList[apSelect]);
+    sendMsg(msg);
 }
 
 
@@ -481,7 +482,7 @@ void configState() {
             case 6: {
                 char msg[] = "Select AP";
                 sendMsg(msg);
-                //selectAP(data, len);
+                selectAP();
                 break;
             }
             default: {

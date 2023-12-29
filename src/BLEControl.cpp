@@ -15,6 +15,7 @@ char BLETerm::cmdArray[9][cmdLen] = {
 bool BLETerm::deviceConnected = false;
 bool BLETerm::oldDeviceConnected = false;
 int BLETerm::curCommand = -1;
+char BLETerm::command[INPUT_MAX_LEN];
 
 void BLETerm::setDeviceConnected(bool status) {
     this->deviceConnected = status;
@@ -44,6 +45,13 @@ void BLETerm::parseCommand(char cmd[], int len) {
         if(memcmp(this->cmdArray[i], cmd, len-1) == 0) {
             Serial.println("Match Found");
             this->curCommand = i;
+            if(len+1 < this->INPUT_MAX_LEN) {
+                //copy into the command array so it can be read by the main functions
+                Serial.print("Stored info: ");
+                Serial.println(cmd);
+                memcpy(this->command, &cmd, len);
+                this->command[len] = '\0';
+            }
             break;
         }
         else {
@@ -58,6 +66,12 @@ void BLETerm::setSpoofAP(int ap) {
 
 int BLETerm::getSpoofAP() {
     return this->spoofAP;
+}
+
+//Return full command entered
+char *BLETerm::getFullCommand() {
+    
+    return this->command;
 }
 
 void MyServerCallbacks::onConnect(BLEServer *pServer) {
@@ -81,10 +95,14 @@ void MyCallbacks::onWrite(BLECharacteristic *pCharacteristic) {
         
         //convert command to lowercase 
         for(int i = 0; i < rxValueLen; i++) {
-            //check if commanad has additional flags
-            if(cmd[i] == 20 && flagsExist != 1) { //switch to second array if flags exist
+            //look for space in command, indicating flags exist
+            if(rxValue[i] == ' ' && flagsExist != 1) {
                 flagsExist = 1;
-                divider = i+1;
+                divider = i;
+                cmd[i] = rxValue[i];
+            }
+            else if(rxValue[i] == ' ') { //Get rid of any extra spaces
+                delay(1);
             }
             //Get rid of control characters such as line breaks
             else if(flagsExist == 0 && rxValue[i] > 31) {
@@ -97,10 +115,11 @@ void MyCallbacks::onWrite(BLECharacteristic *pCharacteristic) {
         }
         Serial.println(cmd);
         if(flagsExist == 0) {
-            BLETerm::parseCommand(cmd, rxValueLen);
+            parseCommand(cmd, rxValueLen);
         }
         else {
-            BLETerm::parseCommand(cmd, rxValueLen, divider);
+            //send space location so function only compares the actual command, not flags
+            parseCommand(cmd, divider);
         }
     }
 }
