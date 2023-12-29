@@ -1,6 +1,7 @@
 #ifndef SPOOFAP_H
 #define SPOOFAP_H
 #include <stdint.h>
+#include <string.h>
 
 class SpoofAP {
     const int maxClients = 50;

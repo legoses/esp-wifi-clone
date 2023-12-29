@@ -86,6 +86,10 @@ char **APInfo::getSSID() {
     return this->SSID;
 }
 
+uint8_t *APInfo::getBSSID(int num) {
+    return this->BSSID[num];
+}
+
 //check if client has already been associated with an ap before adding
 int APInfo::checkClientExist(uint8_t client[], int ap) {
     int clientCount = this->clientCount[ap]; //get number of clients currently associated with this ap

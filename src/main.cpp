@@ -260,16 +260,13 @@ void printSSIDWeb() {
 }
 
 
-void selectAP() {
+int selectAP() {
 
     //flag should start on index 10
     char *cmd = bleTerm.getFullCommand();
-    char **ssidList = apInfo.getSSID();
 
     int apSelect = cmd[11];
-    char msg[30];
-    snprintf(msg, 30, "AP '%s' Selected.", ssidList[apSelect]);
-    sendMsg(msg);
+    return apSelect;
 }
 
 
@@ -469,7 +466,6 @@ void configState() {
             case 4: {
                 char msg[] = "Listing AP";
                 sendMsg(msg);
-                //bleTerm.sendMsg(msg, msgSize);
                 printSSIDWeb(); //print access points
                 break;
             }
@@ -480,9 +476,23 @@ void configState() {
                 break;
             }
             case 6: {
-                char msg[] = "Select AP";
-                sendMsg(msg);
-                selectAP();
+                char **ssidList = apInfo.getSSID();
+                int apNum = selectAP();
+                Serial.print("Cur num: ");
+                Serial.println(apNum);
+                if(apNum < apInfo.getNumAP()) {
+                    uint8_t *bssid = apInfo.getBSSID(apNum);
+                    char msg[30];
+                    snprintf(msg, 30, "AP '%s' Selected.", ssidList[apNum]);
+                    sendMsg(msg);
+
+                    Serial.print("BSSID size: ");
+                    spoofAP.configEvilAP(ssidList[apNum], bssid);
+                }
+                else {
+                    char msg[] = "Selected AP does not exist";
+                    sendMsg(msg);
+                }
                 break;
             }
             default: {
