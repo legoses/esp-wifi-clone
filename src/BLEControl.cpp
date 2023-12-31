@@ -45,12 +45,32 @@ void BLETerm::parseCommand(char cmd[], int len) {
         if(memcmp(this->cmdArray[i], cmd, len-1) == 0) {
             Serial.println("Match Found");
             this->curCommand = i;
+            break;
+        }
+        else {
+            this->curCommand = -2; //value if command is not found
+        }
+    }    
+}
+
+//Used so if there are flags, the full length of the command can still be passed
+void BLETerm::parseCommand(char cmd[], int len, int fullLen) {
+    Serial.print("Pass cmd: ");
+    Serial.println(cmd);
+    for(int i = 0; i < 9; i++) {
+        if(memcmp(this->cmdArray[i], cmd, len-1) == 0) {
+            Serial.println("Match Found");
+            this->curCommand = i;
             if(len+1 < this->INPUT_MAX_LEN) {
                 //copy into the command array so it can be read by the main functions
                 Serial.print("Stored info: ");
                 Serial.println(cmd);
-                memcpy(this->command, &cmd, len);
-                this->command[len] = '\0';
+
+                //memcpy(this->command, &cmd, fullLen);
+                for(int j = 0; j < fullLen; j++) {
+                    this->command[j] = cmd[j];
+                }
+                this->command[fullLen+1] = '\0';
             }
             break;
         }
@@ -89,14 +109,14 @@ void MyCallbacks::onWrite(BLECharacteristic *pCharacteristic) {
 
     Serial.println(rxValue);
     if(rxValueLen > 0) {
-        char cmd[rxValueLen];
+        char cmd[rxValueLen+1];
         int flagsExist = 0;
         int divider;
         
         //convert command to lowercase 
         for(int i = 0; i < rxValueLen; i++) {
-            //look for space in command, indicating flags exist
-            if(rxValue[i] == ' ' && flagsExist != 1) {
+            //look for space in command, indicating flags exist and no spaces exist at beginning of command
+            if(rxValue[i] == ' ' && flagsExist != 1 && i > 0) {
                 flagsExist = 1;
                 divider = i;
                 cmd[i] = rxValue[i];
@@ -104,22 +124,24 @@ void MyCallbacks::onWrite(BLECharacteristic *pCharacteristic) {
             else if(rxValue[i] == ' ') { //Get rid of any extra spaces
                 delay(1);
             }
-            //Get rid of control characters such as line breaks
-            else if(flagsExist == 0 && rxValue[i] > 31) {
+            //Get rid of control characters such as line breaks, and make sure tolower is not applied to an integer
+            else if(flagsExist == 0 && rxValue[i] > 31 && isdigit(rxValue[i]) == 0) {
                 cmd[i] = tolower(rxValue[i]);
             }
-
+            else {
+                cmd[i] = rxValue[i];
+            }
             if(i == rxValueLen-1) {
-                cmd[i] = '\0'; //Add null to end of string
+                cmd[i+1] = '\0'; //Add null to end of string
             }
         }
-        Serial.println(cmd);
+        //print out full recieved command
         if(flagsExist == 0) {
             parseCommand(cmd, rxValueLen);
         }
         else {
             //send space location so function only compares the actual command, not flags
-            parseCommand(cmd, divider);
+            parseCommand(cmd, divider, rxValueLen);
         }
     }
 }

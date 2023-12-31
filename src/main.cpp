@@ -2,10 +2,11 @@
 #include "lvgl.h"      /* https://github.com/lvgl/lvgl.git */
 #include "rm67162.h"
 #include "esp_wifi.h"
+#include "esp_mac.h"
 #include <beaconFrame.h>
 #include <apInfo.h>
-#include <WiFi.h>
-#include <WiFiAP.h>
+//#include <WiFi.h>
+//#include <WiFiAP.h>
 //#include <AsyncTCP.h>
 //#include <ESPAsyncWebServer.h>
 //#include <WebServer.h>
@@ -25,7 +26,8 @@
 
 /*
     TODO:
-    Instead of scanning for clients on all channels, only scan on channels with discovered AP
+    When selectign ap, covnvert multidigit selection into single int
+    Add functionality to spoof ap
 */
 
 //configure AP
@@ -265,8 +267,14 @@ int selectAP() {
     //flag should start on index 10
     char *cmd = bleTerm.getFullCommand();
 
-    int apSelect = cmd[11];
-    return apSelect;
+    //Convert ascii to int value
+    int apSelect = cmd[10] - '0';
+
+    Serial.print("Full command");
+    Serial.println(cmd);
+    Serial.println(apSelect);
+    //Subtract 1 so the value aligns with array value
+    return apSelect-1;
 }
 
 
@@ -476,6 +484,7 @@ void configState() {
                 break;
             }
             case 6: {
+                //array containing all ssid
                 char **ssidList = apInfo.getSSID();
                 int apNum = selectAP();
                 Serial.print("Cur num: ");

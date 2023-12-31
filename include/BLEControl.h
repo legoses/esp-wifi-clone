@@ -39,6 +39,7 @@ class BLETerm {
     void configState(int newCmd);
 
     void parseCommand(char cmd[], int len);
+    void parseCommand(char cmd[], int len, int fullLen);
     void setSpoofAP(int ap);
     int getSpoofAP();
 };
