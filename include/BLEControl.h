@@ -16,7 +16,7 @@
 class BLETerm {
     const static int INPUT_MAX_LEN = 100;
     const static int cmdLen = 32;
-    static char cmdArray[9][cmdLen];
+    static char cmdArray[10][cmdLen];
     static bool deviceConnected; 
     static bool oldDeviceConnected; 
     static int curCommand;

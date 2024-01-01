@@ -2,7 +2,7 @@
 
 int BLETerm::userCmdLen = 0;
 
-char BLETerm::cmdArray[9][cmdLen] = {
+char BLETerm::cmdArray[10][cmdLen] = {
     "help", //0
     "scan-ap", //1 
     "scan-stop", //2
@@ -11,7 +11,8 @@ char BLETerm::cmdArray[9][cmdLen] = {
     "list-clients", //5
     "select-ap", //6
     "select-clients", //7
-    "select-all-clients" //8
+    "select-all-clients", //8
+    "start" //9
     };
 bool BLETerm::deviceConnected = false;
 bool BLETerm::oldDeviceConnected = false;
@@ -50,7 +51,7 @@ bool BLETerm::getOldDeviceConnected() {
 
 //Match the command to the array
 void BLETerm::parseCommand(char cmd[], int len) {
-    for(int i = 0; i < 9; i++) {
+    for(int i = 0; i < 10; i++) {
         if(memcmp(this->cmdArray[i], cmd, len-1) == 0) {
             Serial.println("Match Found");
             this->curCommand = i;
@@ -66,7 +67,7 @@ void BLETerm::parseCommand(char cmd[], int len) {
 void BLETerm::parseCommand(char cmd[], int len, int fullLen) {
     Serial.print("Pass cmd: ");
     Serial.println(cmd);
-    for(int i = 0; i < 9; i++) {
+    for(int i = 0; i < 10; i++) {
         if(memcmp(this->cmdArray[i], cmd, len-1) == 0) {
             Serial.println("Match Found");
             this->curCommand = i;
@@ -75,7 +76,6 @@ void BLETerm::parseCommand(char cmd[], int len, int fullLen) {
                 Serial.print("Stored info: ");
                 Serial.println(cmd);
 
-                //memcpy(this->command, &cmd, fullLen);
                 for(int j = 0; j < fullLen; j++) {
                     this->command[j] = cmd[j];
                 }

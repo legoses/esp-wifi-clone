@@ -213,6 +213,13 @@ void sendMsg(char msg[]) {
 }
 
 
+void sendMsg(const char *msg) {
+    bleTerm.pTxCharacteristic->setValue(msg);
+    bleTerm.pTxCharacteristic->notify();
+    delay(10);
+}
+
+
 void ssidToString(uint8_t ssid[], char newSSID[], int len) {
     //static char *newSSID = (char*)ssid;
     memcpy(newSSID, (char*)ssid, 32);
@@ -225,8 +232,8 @@ void printSSIDWeb() {
     uint8_t **ssidList = apInfo.getSSID();
 
     //WebSerial.println("---AP List---");
-    char msg[] = "---AP List---";
-    sendMsg(msg);
+    //char msg[] = "---AP List---";
+    sendMsg("---AP List---");
     int totalLen = apInfo.SSID_LEN;
     if(num > 0) {
         char apMsg[40];
@@ -248,8 +255,8 @@ void printSSIDWeb() {
         }
     }
     else {
-        char apMsg[] = "No Access Points Found.";
-        sendMsg(apMsg);
+        //char apMsg[] = "No Access Points Found.";
+        sendMsg("No Access Points Found.");
     }
     
 }
@@ -287,13 +294,12 @@ void listClients() {
     int clientCount = apInfo.getClientCount(selectedAP);
     uint8_t clientMac[6];
 
-    char msg[] = "---Client List---";
     //char *sendSSID = (char*)ssidList[selectedAP];
     //int ssidLen = apInfo.getSSIDLen(selectedAP);
     char sendSSID[32];
     ssidToString(ssidList[selectedAP], sendSSID, apInfo.getSSIDLen(selectedAP));
     //sendSSID[ssidLen] = '\0';
-    sendMsg(msg);
+    sendMsg("---Client List---");
     sendMsg(sendSSID);
     int i = 0;
     bool cont = true;
@@ -342,7 +348,7 @@ void listClients() {
 }
 
 
-void startAPSpoof(uint8_t ssid[], int ssidLen, uint8_t bssid[], int channel) {
+void configAPSpoof(uint8_t ssid[], int ssidLen, uint8_t bssid[], int channel) {
     Serial.println("Setting AP values");
     configAP.ap.channel = channel;
     configAP.ap.max_connection = 2;
@@ -352,6 +358,7 @@ void startAPSpoof(uint8_t ssid[], int ssidLen, uint8_t bssid[], int channel) {
     configAP.ap.ssid_len = ssidLen;
     Serial.println("Initializing config");
     esp_wifi_set_config(WIFI_IF_AP, &configAP);
+    esp_wifi_set_mac(WIFI_IF_AP, bssid);
 }
 
 
@@ -377,52 +384,41 @@ void selectDeauthClients() {
     }
     startPoint++;
 
-    for(int i = startPoint; i < userCommandLength; i++) {
-        if(i == ',' && i+1 < userCommandLength) {
+    for(int i = startPoint; i < userCommandLength-1; i++) {
+        if(cmd[i] == ',' && i+1 < userCommandLength) {
             i++;
         }
 
-        int a = cmd[i] - '0';
+        int a = cmd[i] - 49;
         while(isdigit(cmd[i+1]) != 0) {
             int b = cmd[i+1] - '0';
             a = (a *10) + b;
             i++;
         }
-        Serial.printf("A: %i\n", a);
 
         if(a < numClients) {
             Serial.printf("Copying client number %i to deauth array\n", a);
             apInfo.getClient(deauthClients[numDeauthClients], selectedApNum, a);
-        }
-    }
-/*
-    while((isdigit(cmd[startPoint]) != 0) || cmd[startPoint] == ',') {
-        int a = cmd[startPoint]; //number of client to add
-        Serial.println("loop");
-        if(startPoint < maxCmdLen) {
-            //If selected client is two or more digits, combine into single number
-            while(isdigit(cmd[startPoint+1]) != 0) {
-                int b = cmd[startPoint+1] - '0';
-                a = (a *10) + a;
-                startPoint++;
-            }
-
-            //copy selected mac into deauth array
-            if(a < numClients) {
-                Serial.printf("Copying client number %i to deauth array\n", a);
-                apInfo.getClient(deauthClients[numDeauthClients], selectedApNum, a);
-            }
-            
-            //memcpy(deauthClients[numDeauthClients], bssid, 6);
             numDeauthClients++;
-            startPoint++;
-        }
-        else {
-            Serial.println("Command had exceeded max length");
-            break;
         }
     }
-*/
+}
+
+
+void selectAllDeauthClients() {
+    numDeauthClients = apInfo.getClientCount(selectedApNum);
+
+    Serial.println("Selecting all clients");
+    for(int i = 0; i < numDeauthClients; i++) {
+        apInfo.getClient(deauthClients[numDeauthClients], selectedApNum, i);
+    }
+}
+
+
+void startAPSpoof() {
+    esp_wifi_start();
+
+    //esp_wifi_80211_tx();
 }
 
 
@@ -532,41 +528,35 @@ void configState() {
     if(cmd != -1) {
         switch(cmd) {
             case 0: { //help
-                char msg[] = "Placeholder Help Message";
-                sendMsg(msg);
+                sendMsg("Placeholder Help Message");
                 break;
             }
             case 1: { //scan-ap
-                char msg[] = "Starting AP Scan";
                 configurePromisc(0); //init scan for AP
-                sendMsg(msg);
+                sendMsg("Starting AP Scan");
                 switchChan = 1;
                 break;
             }
             case 2: { //scan-stop
-                char msg[] = "Stopping Scan";
-                sendMsg(msg);
+                sendMsg("Stopping Scan");
                 esp_wifi_set_promiscuous(false); //stop ap scan
                 switchChan = 0;
                 break;
             }
             case 3: { //scan-client
-                char msg[] = "Staring Client Scan";
-                sendMsg(msg);
+                sendMsg("Staring Client Scan");
                 configurePromisc(1); //start client scan
                 switchChan = 2;
                 channel = 0;
                 break;
             }
             case 4: { //list ap
-                char msg[] = "Listing AP";
-                sendMsg(msg);
+                sendMsg("Listing AP");
                 printSSIDWeb(); //print access points
                 break;
             }
             case 5: { //list-clients
-                char msg[] = "Listing Clients";
-                sendMsg(msg);
+                sendMsg("Listing Clients");
                 listClients();
                 break;
             }
@@ -587,28 +577,52 @@ void configState() {
                     sendMsg(msg);
                     
                     //Store info to spoof ap
-                    startAPSpoof(ssidList[selectedApNum], apInfo.getSSIDLen(selectedApNum), bssid, apInfo.getChannel(selectedApNum));
+                    configAPSpoof(ssidList[selectedApNum], apInfo.getSSIDLen(selectedApNum), bssid, apInfo.getChannel(selectedApNum));
                 }
                 else {
-                    char msg[] = "Selected AP does not exist";
-                    sendMsg(msg);
+                    sendMsg("Selected AP does not exist");
                 }
+
                 break;
             }
             case 7: { //select client
             
                 if(selectedApNum != -1) {
+                    sendMsg("Adding selected clients");
                     selectDeauthClients();
                 }
                 else {
-                    char msg[] = "[Error] An access point must be selected";
-                    sendMsg(msg);
+                    sendMsg("[Error] An access point must be selected");
+                }
+                break;
+            }
+            case 8: { //select all clients
+                if(selectedApNum != -1) {
+                    sendMsg("Selecting all clients");
+                    selectAllDeauthClients();
+                }
+                else {
+                    sendMsg("[Error] An access point must be selected");
+                }
+                break;
+            }
+            case 9: { //start attack
+                if(selectedApNum != -1 && numDeauthClients > 0) {
+                    sendMsg("Starting attack");
+                    startAPSpoof();
+                }
+                else if(selectedApNum == -1) {
+                    sendMsg("[Error] An an access point must be selected");
+                }
+                else if(numDeauthClients == 0) {
+                    sendMsg("No clients selected. Defaulting to all.");
+                    selectAllDeauthClients();
+                    startAPSpoof();
                 }
                 break;
             }
             default: {
-                char msg[] = "[Error] Command Not Found";
-                sendMsg(msg);
+                sendMsg("[Error] Command Not Found");
             }
         }
         bleTerm.resetCommand();
