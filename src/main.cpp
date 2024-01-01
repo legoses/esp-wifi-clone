@@ -46,6 +46,7 @@ APInfo apInfo;
 SpoofAP spoofAP;
 //Setup BLE
 BLETerm bleTerm;
+wifi_config_t configAP;
 
 wifi_init_config_t config = WIFI_INIT_CONFIG_DEFAULT();
 wifi_promiscuous_filter_t filter;
@@ -324,19 +325,19 @@ void listClients() {
 void startAPSpoof(uint8_t ssid[], int ssidLen, uint8_t bssid[], int channel) {
     wifi_config_t config;
     Serial.println("Setting AP values");
-    config.ap.channel = channel;
-    config.ap.max_connection = 2;
-    config.ap.authmode = WIFI_AUTH_OPEN;
+    configAP.ap.channel = channel;
+    configAP.ap.max_connection = 2;
+    configAP.ap.authmode = WIFI_AUTH_OPEN;
 
-    memcpy(config.ap.ssid, ssid, 32);
-    config.ap.ssid_len = ssidLen;
+    memcpy(configAP.ap.ssid, ssid, 32);
+    configAP.ap.ssid_len = ssidLen;
     Serial.println("Initializing config");
-    esp_wifi_set_config(WIFI_IF_AP, &config);
+    esp_wifi_set_config(WIFI_IF_AP, &configAP);
 
-    Serial.println("Restarting WIFI");
-    esp_wifi_stop();
-    delay(100);
-    esp_wifi_start();
+    //Serial.println("Restarting WIFI");
+    //esp_wifi_stop();
+    //delay(100);
+    //esp_wifi_start();
 }
 
 
@@ -445,26 +446,26 @@ void configState() {
     Serial.printf("Command: %i\n", cmd);
     if(cmd != -1) {
         switch(cmd) {
-            case 0: {
+            case 0: { //help
                 char msg[] = "Placeholder Help Message";
                 sendMsg(msg);
                 break;
             }
-            case 1: {
+            case 1: { //scan-ap
                 char msg[] = "Starting AP Scan";
                 configurePromisc(0); //init scan for AP
                 sendMsg(msg);
                 switchChan = 1;
                 break;
             }
-            case 2: {
+            case 2: { //scan-stop
                 char msg[] = "Stopping Scan";
                 sendMsg(msg);
                 esp_wifi_set_promiscuous(false); //stop ap scan
                 switchChan = 0;
                 break;
             }
-            case 3: {
+            case 3: { //scan-client
                 char msg[] = "Staring Client Scan";
                 sendMsg(msg);
                 configurePromisc(1); //start client scan
@@ -472,19 +473,19 @@ void configState() {
                 channel = 0;
                 break;
             }
-            case 4: {
+            case 4: { //list ap
                 char msg[] = "Listing AP";
                 sendMsg(msg);
                 printSSIDWeb(); //print access points
                 break;
             }
-            case 5: {
+            case 5: { //list-clients
                 char msg[] = "Listing Clients";
                 sendMsg(msg);
                 listClients();
                 break;
             }
-            case 6: {
+            case 6: { //select-ap
                 //array containing all ssid
                 uint8_t **ssidList = apInfo.getSSID();
                 int apNum = selectAP();
@@ -498,6 +499,9 @@ void configState() {
                     
                     //Store info to spoof ap
                     startAPSpoof(ssidList[apNum], apInfo.getSSIDLen(apNum), bssid, apInfo.getChannel(apNum));
+                }
+                case 7: { //select client
+                    
                 }
                 else {
                     char msg[] = "Selected AP does not exist";
