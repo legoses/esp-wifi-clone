@@ -7,7 +7,8 @@
 class APInfo {
     static const int numAP = 20;
     static const int numClient = 40;
-    char **SSID;
+    uint8_t **SSID;
+    int ssidLen[numAP];
     uint8_t BSSID[numAP][6];
     signed rssi[numAP];
     uint8_t channel[numAP];
@@ -22,17 +23,18 @@ class APInfo {
     public:
     const int SSID_LEN = 32;
     APInfo();
-    char **getSSID();
+    uint8_t **getSSID();
     uint8_t *getBSSID(int num);
     uint8_t getRssi(int num);
     int checkExisting(uint8_t bssid[]);
-    bool addAP(char ssid[], uint8_t bssid[], signed rssi, uint8_t channel, int len);
+    bool addAP(uint8_t ssid[], uint8_t bssid[], signed rssi, uint8_t channel, int len);
     uint8_t getChannel(int num);
     void addClient(uint8_t mac[], int pos);
     int getNumAP();
     void getClient(uint8_t store[], int ap, int client); //return selected client mac for selected ap
     int getClientCount(int ap); //get number of clients connected to an ap
     int checkClientExist(uint8_t client[], int ap);
+    int getSSIDLen(int num);
 };
 
 #endif

@@ -4,13 +4,17 @@
 #include <string.h>
 
 class SpoofAP {
-    const int maxClients = 50;
+    static const int maxClients;
     char SSID[32];
     uint8_t BSSID[6];
+    uint8_t client[50][6];
+    int channel;
 
     public:
-    void configEvilAP(char ssid[], uint8_t bssid[]);
-
+    void setSpoofAP(char ssid[], uint8_t bssid[], int len, int channel);
+    int getChannel();
+    void getSSID(char ssid[]);
+    void getBSSID(uint8_t bssid[]);
 };
 
 #endif

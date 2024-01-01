@@ -23,9 +23,9 @@ void BeaconFrame::getBSSID(uint8_t bssid[], int len) {
     }
 }
 
-void BeaconFrame::getSSID(char ssid[], uint8_t ssidLen) {
+void BeaconFrame::getSSID(uint8_t ssid[], uint8_t ssidLen) {
     for(int i = 2; i < ssidLen+2; i++) {
-        ssid[i-2] = (char)this->payload[i];
+        ssid[i-2] = this->payload[i];
     }
 }
 

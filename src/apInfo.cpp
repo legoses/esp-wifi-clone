@@ -8,10 +8,10 @@ APInfo::APInfo() {
     memset(this->clientCount, 0, 6);
 
     //Allocate memory for ssid array
-    this->SSID = (char**)malloc(numAP * sizeof(char*));
+    this->SSID = (uint8_t**)malloc(numAP * sizeof(uint8_t*));
     for(int i = 0; i < this->numAP; i++)
     {
-        SSID[i] = (char*)malloc(this->SSID_LEN * sizeof(char));
+        SSID[i] = (uint8_t*)malloc(this->SSID_LEN * sizeof(uint8_t));
     }
 }
 
@@ -47,9 +47,9 @@ void APInfo::addClient(uint8_t mac[], int pos) {
             Serial.println();
 
             copyInfo(clients[pos][numClient], mac, 6);
-            Serial.print(this->SSID[pos]);
-            Serial.print(" clients: ");
-            Serial.println(this->clientCount[pos]);
+            //Serial.print(this->SSID[pos]);
+            //Serial.print(" clients: ");
+            //Serial.println(this->clientCount[pos]);
             this->clientCount[pos]++;
 
         }
@@ -75,14 +75,14 @@ void APInfo::copyInfo(char storeArr[], char copyArr[], int len) {
     for(int i = 0; i < len; i++) {
         storeArr[i] = copyArr[i];
     }
-    storeArr[len] = '\0';
+    storeArr[len] = '\0'; //Add null terminator
 }
 
 int APInfo::getNumAP() {
     return this->curNum;
 }
 
-char **APInfo::getSSID() {
+uint8_t **APInfo::getSSID() {
     return this->SSID;
 }
 
@@ -124,12 +124,17 @@ uint8_t APInfo::getChannel(int num) {
     return this->channel[num];
 }
 
-bool APInfo::addAP(char ssid[], uint8_t bssid[], signed rssi, uint8_t channel, int len) {
+int APInfo::getSSIDLen(int num) {
+    return this->ssidLen[num];
+}
+
+bool APInfo::addAP(uint8_t ssid[], uint8_t bssid[], signed rssi, uint8_t channel, int len) {
     //Make sure ssid length is 32 or less and number of stored AP is 10 or less
     if(checkExisting(bssid) == -1 && len < this->SSID_LEN && this->curNum < 10 && len > 0) {
         //Copy information to class variabes
         copyInfo(this->SSID[curNum], ssid, len);
         copyInfo(this->BSSID[curNum], bssid, 6);
+        ssidLen[curNum] = len;
         this->rssi[this->curNum] = rssi;
         this->channel[this->curNum] = channel;
         

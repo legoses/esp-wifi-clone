@@ -5,14 +5,6 @@
 #include "esp_mac.h"
 #include <beaconFrame.h>
 #include <apInfo.h>
-//#include <WiFi.h>
-//#include <WiFiAP.h>
-//#include <AsyncTCP.h>
-//#include <ESPAsyncWebServer.h>
-//#include <WebServer.h>
-//#include <WebSerial.h>
-#include <spoofAP.h>
-//#include <bleSetup.h>
 #include <BLEControl.h>
 
 
@@ -26,17 +18,14 @@
 
 /*
     TODO:
-    When selectign ap, covnvert multidigit selection into single int
-    Add functionality to spoof ap
+    Store AP config so it can be configured and initialized seperatly
+    Implement client select
+    Change mac to chosen bssid
+    Implement deauth functionality
 */
 
 //configure AP
 int switchChan = 0;
-
-//function comparing client command to this array will return int containing the command position in the array
-//Int will be used in switch case to determing next step
-
-//AsyncWebServer Server(80);
 
 static lv_style_t clock_obj_style;
 static lv_style_t sep_style;
@@ -81,20 +70,12 @@ void configSepStyle() {
 
 
 void parseBeacon(wifi_promiscuous_pkt_t *mgmtPacket, signed rssi, uint8_t channel) {
-    //volatile byte beaconArr = 0 << 8;
 
-    //Read through first byte to determine if recieved packet is a beacon 
     /*
-    for(int i = 7; i >= 0; i--) {
-        byte bit = bitRead(mgmtPacket->payload[0], i);
-
-        beaconArr = beaconArr | (bit << i+1);
-    }
-
-        128 stands for 10000000 in binary 
-        1000 - first four digits are the frame subtype. In this case it is the beacon subtype
-        00 - Middle numbers are the frame type.
-        00 - Last two zeroes are the version. In this case, it means we are using 802.11
+    128 stands for 10000000 in binary 
+    1000 - first four digits are the frame subtype. In this case it is the beacon subtype
+    00 - Middle numbers are the frame type.
+    00 - Last two zeroes are the version. In this case, it means we are using 802.11
 
     */
 
@@ -109,7 +90,7 @@ void parseBeacon(wifi_promiscuous_pkt_t *mgmtPacket, signed rssi, uint8_t channe
     
     if(sizeof(payload) > 0) {
         //Get necessary info from beacon
-        char ssid[ssidLen];
+        uint8_t ssid[ssidLen];
         beacon->getSSID(ssid, ssidLen);
         uint8_t bssid[6];
         beacon->getBSSID(bssid, 6);
@@ -229,7 +210,7 @@ void sendMsg(char msg[]) {
 
 void printSSIDWeb() {
     int num = apInfo.getNumAP();
-    char **ssidList = apInfo.getSSID();
+    uint8_t **ssidList = apInfo.getSSID();
 
     //WebSerial.println("---AP List---");
     char msg[] = "---AP List---";
@@ -243,15 +224,12 @@ void printSSIDWeb() {
             apMsg[1] = '.';
             apMsg[2] = 20; //space character
 
-
-            int ssidLen = strlen(ssidList[i]);
-            Serial.println(ssidList[i]);
-            if(ssidLen < totalLen) {
-                strcat(apMsg, ssidList[i]);
-                Serial.printf("Sending: %s\n", apMsg);
-                sendMsg(apMsg);
-                memset(apMsg, '\0', 40);
-            }
+            //max length of ssid
+            int ssidLen = 32;
+            snprintf(apMsg, 40, "%i. %s\0", i+1, (char*)ssidList[i]);
+            Serial.printf("Sending: %s\n", apMsg);
+            sendMsg(apMsg);
+            memset(apMsg, '\0', 40);
         }
     }
     else {
@@ -269,6 +247,14 @@ int selectAP() {
 
     //Convert ascii to int value
     int apSelect = cmd[10] - '0';
+    int i = 10;
+
+    //If number is miltiple digits, combine into a single number
+    while(isdigit(cmd[i+1]) != 0) {
+        int a = cmd[i+1] - '0';
+        apSelect = (apSelect *10) + a;
+        i++;
+    }
 
     Serial.print("Full command");
     Serial.println(cmd);
@@ -280,7 +266,7 @@ int selectAP() {
 
 void listClients() {
     int num = apInfo.getNumAP();
-    char **ssidList = apInfo.getSSID();
+    uint8_t **ssidList = apInfo.getSSID();
 
     int selectedAP = 0;
     int clientCount = apInfo.getClientCount(selectedAP);
@@ -288,16 +274,13 @@ void listClients() {
 
     char msg[] = "---Client List---";
     sendMsg(msg);
-    sendMsg(ssidList[selectedAP]);
+    sendMsg((char*)ssidList[selectedAP]);
     int i = 0;
     bool cont = true;
 
     char clientMsg[20];
     memset(clientMsg, '\0', 20);
     do {
-        //apMsg[0] = i+49; //Convert to ascii number so it prints properly
-        //apMsg[1] = '.';
-        //apMsg[2] = 20; //space character
         apInfo.getClient(clientMac, selectedAP, i);
         if(clientCount > 0) {
             snprintf(clientMsg, 20, "%i. %x:%x:%x:%x:%x:%x", 
@@ -311,7 +294,6 @@ void listClients() {
             );
         }
         else {
-            //WebSerial.println("No Clients Found.");
             snprintf(clientMsg, 20, "No Clients Found.");
         }
         sendMsg(clientMsg);
@@ -325,8 +307,7 @@ void listClients() {
             i=0;
             
             if(selectedAP < num) {
-                //WebSerial.print("\n\n");
-                sendMsg(ssidList[selectedAP]);
+                sendMsg((char*)ssidList[selectedAP]);
             }
             else if(selectedAP >= num) {
                 cont = false;
@@ -337,6 +318,25 @@ void listClients() {
         delay(100);
     } while(cont == true);
     
+}
+
+
+void startAPSpoof(uint8_t ssid[], int ssidLen, uint8_t bssid[], int channel) {
+    wifi_config_t config;
+    Serial.println("Setting AP values");
+    config.ap.channel = channel;
+    config.ap.max_connection = 2;
+    config.ap.authmode = WIFI_AUTH_OPEN;
+
+    memcpy(config.ap.ssid, ssid, 32);
+    config.ap.ssid_len = ssidLen;
+    Serial.println("Initializing config");
+    esp_wifi_set_config(WIFI_IF_AP, &config);
+
+    Serial.println("Restarting WIFI");
+    esp_wifi_stop();
+    delay(100);
+    esp_wifi_start();
 }
 
 
@@ -454,6 +454,7 @@ void configState() {
                 char msg[] = "Starting AP Scan";
                 configurePromisc(0); //init scan for AP
                 sendMsg(msg);
+                switchChan = 1;
                 break;
             }
             case 2: {
@@ -485,7 +486,7 @@ void configState() {
             }
             case 6: {
                 //array containing all ssid
-                char **ssidList = apInfo.getSSID();
+                uint8_t **ssidList = apInfo.getSSID();
                 int apNum = selectAP();
                 Serial.print("Cur num: ");
                 Serial.println(apNum);
@@ -494,9 +495,9 @@ void configState() {
                     char msg[30];
                     snprintf(msg, 30, "AP '%s' Selected.", ssidList[apNum]);
                     sendMsg(msg);
-
-                    Serial.print("BSSID size: ");
-                    spoofAP.configEvilAP(ssidList[apNum], bssid);
+                    
+                    //Store info to spoof ap
+                    startAPSpoof(ssidList[apNum], apInfo.getSSIDLen(apNum), bssid, apInfo.getChannel(apNum));
                 }
                 else {
                     char msg[] = "Selected AP does not exist";
@@ -516,13 +517,12 @@ void configState() {
 void loop()
 {
     int curChannel = channel;
-    //bleTerm.connectionStatus();
 
     configState();
 
     switch(switchChan) {
         case 1: //Scan for ap on all channels
-            if(millis() - curTime > 1000) {
+            if(millis() - curTime > 100) {
                 if(channel <= 11) {
                     channel++;
                     esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
