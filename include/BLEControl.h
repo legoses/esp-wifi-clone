@@ -21,6 +21,7 @@ class BLETerm {
     static bool oldDeviceConnected; 
     static int curCommand;
     static char command[INPUT_MAX_LEN];
+    static int userCmdLen;
     static int spoofAP;
 
     public:
@@ -29,6 +30,8 @@ class BLETerm {
     int getCommand();
     void resetCommand();
     char *getFullCommand();
+    int getCommandLength();
+    void setCommandLength(int cmdLen);
     
     void setDeviceConnected(bool status);
     bool getDeviceConnected();

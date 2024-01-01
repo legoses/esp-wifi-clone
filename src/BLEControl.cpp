@@ -1,11 +1,12 @@
 #include <BLEControl.h>
 
+int BLETerm::userCmdLen = 0;
 
 char BLETerm::cmdArray[9][cmdLen] = {
     "help", //0
     "scan-ap", //1 
     "scan-stop", //2
-    "scan-client", //3
+    "scan-clients", //3
     "list-ap", //4
     "list-clients", //5
     "select-ap", //6
@@ -26,6 +27,14 @@ bool BLETerm::getDeviceConnected() {
 
 int BLETerm::getCommand() {
     return this->curCommand;
+}
+
+int BLETerm::getCommandLength() {
+    return this->userCmdLen;
+}
+
+void BLETerm::setCommandLength(int cmdLen) {
+    this->userCmdLen = cmdLen;
 }
 
 void BLETerm::resetCommand() {
@@ -106,9 +115,11 @@ void MyServerCallbacks::onDisconnect(BLEServer *pServer) {
 void MyCallbacks::onWrite(BLECharacteristic *pCharacteristic) {
     const char *rxValue = pCharacteristic->getValue().c_str();
     int rxValueLen = strlen(rxValue);
+    
 
     Serial.println(rxValue);
     if(rxValueLen > 0) {
+        setCommandLength(rxValueLen); //Store command length
         char cmd[rxValueLen+1];
         int flagsExist = 0;
         int divider;

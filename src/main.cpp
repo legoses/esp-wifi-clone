@@ -33,7 +33,7 @@ lv_color_t blue = lv_color_hex(0x6f8bc6);
 lv_color_t darkBlue = lv_color_hex(0x2e3440);
 lv_color_t shadow = lv_color_hex(0x2f333d);
 
-const uint8_t BEACON = 128;
+const uint8_t BEACON = 128; //First byte in frame that determins beacon subtype
 
 const long offsetSec = 3600;
 int channel = 1;
@@ -43,13 +43,16 @@ int currentMode = 0;
 
 //Store info on scanned AP
 APInfo apInfo;
-SpoofAP spoofAP;
 //Setup BLE
 BLETerm bleTerm;
-wifi_config_t configAP;
 
+//Wifi config variables
+wifi_config_t configAP;
 wifi_init_config_t config = WIFI_INIT_CONFIG_DEFAULT();
 wifi_promiscuous_filter_t filter;
+uint8_t deauthClients[50][6]; //Store client mac addresses
+int numDeauthClients = 0;
+int selectedApNum = -1; //If value is -1, an ap has not been selected
 
 void configStyle() {
     lv_style_init(&clock_obj_style);
@@ -209,6 +212,14 @@ void sendMsg(char msg[]) {
     delay(10);
 }
 
+
+void ssidToString(uint8_t ssid[], char newSSID[], int len) {
+    //static char *newSSID = (char*)ssid;
+    memcpy(newSSID, (char*)ssid, 32);
+    newSSID[len] = '\0';
+}
+
+
 void printSSIDWeb() {
     int num = apInfo.getNumAP();
     uint8_t **ssidList = apInfo.getSSID();
@@ -221,16 +232,19 @@ void printSSIDWeb() {
         char apMsg[40];
         memset(apMsg, '\0', 40);
         for(int i = 0; i < num; i++) {
-            apMsg[0] = i+49; //Convert to ascii number so it prints properly
-            apMsg[1] = '.';
-            apMsg[2] = 20; //space character
+            //apMsg[0] = i+49; //Convert to ascii number so it prints properly
+            //apMsg[1] = '.';
+            //apMsg[2] = 20; //space character
 
             //max length of ssid
-            int ssidLen = 32;
-            snprintf(apMsg, 40, "%i. %s\0", i+1, (char*)ssidList[i]);
-            Serial.printf("Sending: %s\n", apMsg);
-            sendMsg(apMsg);
-            memset(apMsg, '\0', 40);
+            int ssidLen = apInfo.getSSIDLen(i);
+
+            if(ssidLen != 0) {
+                snprintf(apMsg, ssidLen+4, "%i. %s", i+1, (char*)ssidList[i]);
+                Serial.printf("Sending: %s\n", apMsg);
+                sendMsg(apMsg);
+                memset(apMsg, '\0', 40);
+            }  
         }
     }
     else {
@@ -241,8 +255,8 @@ void printSSIDWeb() {
 }
 
 
-int selectAP() {
-
+//Parse command to get ap number that was selected
+void selectAP() {
     //flag should start on index 10
     char *cmd = bleTerm.getFullCommand();
 
@@ -261,7 +275,7 @@ int selectAP() {
     Serial.println(cmd);
     Serial.println(apSelect);
     //Subtract 1 so the value aligns with array value
-    return apSelect-1;
+    selectedApNum = apSelect-1;
 }
 
 
@@ -274,8 +288,13 @@ void listClients() {
     uint8_t clientMac[6];
 
     char msg[] = "---Client List---";
+    //char *sendSSID = (char*)ssidList[selectedAP];
+    //int ssidLen = apInfo.getSSIDLen(selectedAP);
+    char sendSSID[32];
+    ssidToString(ssidList[selectedAP], sendSSID, apInfo.getSSIDLen(selectedAP));
+    //sendSSID[ssidLen] = '\0';
     sendMsg(msg);
-    sendMsg((char*)ssidList[selectedAP]);
+    sendMsg(sendSSID);
     int i = 0;
     bool cont = true;
 
@@ -308,13 +327,14 @@ void listClients() {
             i=0;
             
             if(selectedAP < num) {
-                sendMsg((char*)ssidList[selectedAP]);
+                char send[32];
+                ssidToString(ssidList[selectedAP], send, apInfo.getSSIDLen(selectedAP));
+                sendMsg(send);
             }
             else if(selectedAP >= num) {
                 cont = false;
             }
         }
-
 
         delay(100);
     } while(cont == true);
@@ -323,7 +343,6 @@ void listClients() {
 
 
 void startAPSpoof(uint8_t ssid[], int ssidLen, uint8_t bssid[], int channel) {
-    wifi_config_t config;
     Serial.println("Setting AP values");
     configAP.ap.channel = channel;
     configAP.ap.max_connection = 2;
@@ -333,11 +352,77 @@ void startAPSpoof(uint8_t ssid[], int ssidLen, uint8_t bssid[], int channel) {
     configAP.ap.ssid_len = ssidLen;
     Serial.println("Initializing config");
     esp_wifi_set_config(WIFI_IF_AP, &configAP);
+}
 
-    //Serial.println("Restarting WIFI");
-    //esp_wifi_stop();
-    //delay(100);
-    //esp_wifi_start();
+
+void selectDeauthClients() {
+    //command should start on 15
+    char *cmd = bleTerm.getFullCommand();
+    int userCommandLength = bleTerm.getCommandLength();
+    int maxCmdLen = 100;
+    int startPoint = 14;
+    int numClients = apInfo.getClientCount(selectedApNum);
+
+    //If flags do no start at index 15, find the starting point
+    if(cmd[startPoint] != ' ') {
+        Serial.println("Incorrect format");
+        startPoint = 0;
+
+        //loop until the space seperating cmd and flags is found
+        while(cmd[startPoint] != ' ') {
+            startPoint++;
+        }
+        
+        Serial.printf("New starting point: %i\n", startPoint);
+    }
+    startPoint++;
+
+    for(int i = startPoint; i < userCommandLength; i++) {
+        if(i == ',' && i+1 < userCommandLength) {
+            i++;
+        }
+
+        int a = cmd[i] - '0';
+        while(isdigit(cmd[i+1]) != 0) {
+            int b = cmd[i+1] - '0';
+            a = (a *10) + b;
+            i++;
+        }
+        Serial.printf("A: %i\n", a);
+
+        if(a < numClients) {
+            Serial.printf("Copying client number %i to deauth array\n", a);
+            apInfo.getClient(deauthClients[numDeauthClients], selectedApNum, a);
+        }
+    }
+/*
+    while((isdigit(cmd[startPoint]) != 0) || cmd[startPoint] == ',') {
+        int a = cmd[startPoint]; //number of client to add
+        Serial.println("loop");
+        if(startPoint < maxCmdLen) {
+            //If selected client is two or more digits, combine into single number
+            while(isdigit(cmd[startPoint+1]) != 0) {
+                int b = cmd[startPoint+1] - '0';
+                a = (a *10) + a;
+                startPoint++;
+            }
+
+            //copy selected mac into deauth array
+            if(a < numClients) {
+                Serial.printf("Copying client number %i to deauth array\n", a);
+                apInfo.getClient(deauthClients[numDeauthClients], selectedApNum, a);
+            }
+            
+            //memcpy(deauthClients[numDeauthClients], bssid, 6);
+            numDeauthClients++;
+            startPoint++;
+        }
+        else {
+            Serial.println("Command had exceeded max length");
+            break;
+        }
+    }
+*/
 }
 
 
@@ -488,23 +573,35 @@ void configState() {
             case 6: { //select-ap
                 //array containing all ssid
                 uint8_t **ssidList = apInfo.getSSID();
-                int apNum = selectAP();
+                char charSSID[32];
+                selectAP();
+                int ssidLen = apInfo.getSSIDLen(selectedApNum);
+
+                ssidToString(ssidList[selectedApNum], charSSID, selectedApNum);
                 Serial.print("Cur num: ");
-                Serial.println(apNum);
-                if(apNum < apInfo.getNumAP()) {
-                    uint8_t *bssid = apInfo.getBSSID(apNum);
-                    char msg[30];
-                    snprintf(msg, 30, "AP '%s' Selected.", ssidList[apNum]);
+                Serial.println(selectedApNum);
+                if(selectedApNum < apInfo.getNumAP()) {
+                    uint8_t *bssid = apInfo.getBSSID(selectedApNum);
+                    char msg[50];
+                    snprintf(msg, 50, "AP '%s' Selected.", charSSID);
                     sendMsg(msg);
                     
                     //Store info to spoof ap
-                    startAPSpoof(ssidList[apNum], apInfo.getSSIDLen(apNum), bssid, apInfo.getChannel(apNum));
-                }
-                case 7: { //select client
-                    
+                    startAPSpoof(ssidList[selectedApNum], apInfo.getSSIDLen(selectedApNum), bssid, apInfo.getChannel(selectedApNum));
                 }
                 else {
                     char msg[] = "Selected AP does not exist";
+                    sendMsg(msg);
+                }
+                break;
+            }
+            case 7: { //select client
+            
+                if(selectedApNum != -1) {
+                    selectDeauthClients();
+                }
+                else {
+                    char msg[] = "[Error] An access point must be selected";
                     sendMsg(msg);
                 }
                 break;

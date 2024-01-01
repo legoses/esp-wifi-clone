@@ -125,7 +125,11 @@ uint8_t APInfo::getChannel(int num) {
 }
 
 int APInfo::getSSIDLen(int num) {
-    return this->ssidLen[num];
+    if(num < curNum) {
+         return this->ssidLen[num];
+    }
+    return 0;
+   
 }
 
 bool APInfo::addAP(uint8_t ssid[], uint8_t bssid[], signed rssi, uint8_t channel, int len) {
