@@ -6,7 +6,10 @@
 #include <beaconFrame.h>
 #include <apInfo.h>
 #include <BLEControl.h>
-
+#include <WiFi.h>
+#include "esp_netif.h"
+#include <lwip/netif.h>
+#include <lwip/sockets.h>
 
 #if ARDUINO_USB_CDC_ON_BOOT != 1
 #warning "If you need to monitor printed data, be sure to set USB CDC On boot to ENABLE, otherwise you will not see any data in the serial monitor"
@@ -62,7 +65,12 @@ uint8_t rawDeauthFrame[] = {
     0x00, 0x00 //sequence number
 };
 
-
+/*
+struct sockaddr {
+    unsigned short sa_family;
+    uint8_t sa_data[6];
+};
+*/
 void configStyle() {
     lv_style_init(&clock_obj_style);
     lv_style_set_border_color(&clock_obj_style, blue);
@@ -426,13 +434,23 @@ void selectAllDeauthClients() {
 
 void startAPSpoof() {
     esp_wifi_start();
-    //esp_wifi_deauth_sta(0);
+
     const void *buffer = &rawDeauthFrame;
-    int bufferLen = sizeof(rawDeauthFrame)/sizeof(rawDeauthFrame[0]);
+    int bufferSize = sizeof(rawDeauthFrame)/sizeof(rawDeauthFrame[0]);
+    //sockaddr socketaddress;
+    //socketaddress.sa_family = AF_PACKET;
+    //socketaddress.sa_data = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+    //uint8_t testMac[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+    //memcpy(socketaddress.sa_data, testMac, sizeof(testMac));
+    esp_vfs_l2tap_intf_register(NULL);
+
+    //int sockfd = socket(AF_PACKET, SOCK_RAW, IPPROTO_RAW);
+    //int bufferLen = sizeof(rawDeauthFrame);
 
     Serial.println("Startung deauth test");
     while(true) {
-        esp_wifi_80211_tx(WIFI_IF_AP, buffer, bufferLen, false);
+        //esp_wifi_80211_tx(WIFI_IF_AP, buffer, bufferLen, false);
+        sendto(sockfd, buffer, bufferSize, 0, (struct sockaddr*)&socketaddress, sizeof(socketaddress));
         delay(10);
     }
 }
@@ -464,6 +482,7 @@ void setup()
     }
     Serial.println("Starting bluetooth");
     setupBLE(bleTerm);
+    //int socketTest = socket(AF_INET, RAW_SOCKET, sefsef);
     ////bleTerm.begin();
 
     //Setup serial webpage
