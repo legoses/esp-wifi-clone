@@ -19,3 +19,11 @@ void SpoofAP::getSSID(char ssid[]) {
 void SpoofAP::getBSSID(uint8_t bssid[]) {
     memcpy(bssid, this->BSSID, sizeof(uint8_t)*6);
 }
+
+void SpoofAP::setSSIDNum(int a) {
+    this->ssidNum = a;
+}
+
+int SpoofAP::getSSIDNum() {
+    return this->ssidNum;
+}

