@@ -23,8 +23,9 @@
     https://stackoverflow.com/questions/21411851/how-to-send-data-over-a-raw-ethernet-socket-using-sendto-without-using-sockaddr
     https://www.man7.org/linux/man-pages/man7/ip.7.html
 
-    Port to esp-idf to use wsl bypasser and enabel deauth frames
     https://github.com/risinek/esp32-wifi-penetration-tool/tree/master/components/wsl_bypasser
+
+    Figure out why ap callback function crashed when accessing event data
 */
 
 //configure AP
