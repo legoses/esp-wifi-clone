@@ -31,6 +31,8 @@
     
     Check if advertised bssid is the same as the mac device are sending data to
     Mess with client discovery to see if there is a better way to go about it
+
+    Look into why correct AP name is no longer advertised
 */
 
 //configure AP
@@ -123,18 +125,29 @@ void parseBeacon(wifi_promiscuous_pkt_t *mgmtPacket, signed rssi, uint8_t channe
 
 
 void scanForClient(wifi_promiscuous_pkt_t *mgmtPacket) {
+    uint8_t broadcastAddr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
     BeaconFrame *beacon = (BeaconFrame*)mgmtPacket->payload;
     uint8_t destAddr[6];
+    uint8_t recvAddr[6];
     //Get destination mac from recived packet
     beacon->getDestinationAddress(destAddr, 6);
+    beacon->getSenderAddress(recvAddr, 6);
     //Get position mac is stored in
-    int pos = apInfo.checkExisting(destAddr);
-    if(pos != -1) {
+    int posDestAddr = apInfo.checkExisting(destAddr);
+    int posRecvAddr = apInfo.checkExisting(recvAddr);
+    if(posDestAddr != -1 && memcmp(broadcastAddr, destAddr, 6) != 0) {
         uint8_t sendAddr[6];
         beacon->getSenderAddress(sendAddr, 6);
-        Serial.println("MAC exists");
-        apInfo.addClient(sendAddr, pos);
+        Serial.println("Destination MAC exists");
+        apInfo.addClient(sendAddr, posDestAddr);
     }
+    if(posRecvAddr != -1 && memcmp(broadcastAddr, recvAddr, 6) != 0) {
+        uint8_t clientAddr[6];
+        beacon->getDestinationAddress(clientAddr, 6);
+        Serial.println("Redvier MAC exists");
+        apInfo.addClient(clientAddr, posRecvAddr);
+    }
+
 }
 
 
@@ -260,7 +273,7 @@ void selectAP() {
     }
 
     //Subtract 1 so the value aligns with array value
-    if(apSelect-1 > 0) {
+    if(apSelect-1 >= 0) {
         selectedApNum = apSelect-1;
     }
     else {
@@ -484,8 +497,8 @@ void startAPSpoof() {
 void setup()
 {
     //prevent esp from advertising previously spoofed ap
-    nvs_flash_erase();
-    nvs_flash_init();
+    //nvs_flash_erase();
+    //nvs_flash_init();
 
     Serial.begin(115200);
     //Serup wifi access point
@@ -554,7 +567,7 @@ void configState() {
                 char charSSID[32];
                 selectAP();
 
-                if(selectedApNum > 0) {
+                if(selectedApNum >= 0) {
                     int ssidLen = apInfo.getSSIDLen(selectedApNum);
 
                     ssidToString(ssidList[selectedApNum], charSSID, ssidLen);
