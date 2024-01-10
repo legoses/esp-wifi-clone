@@ -32,7 +32,10 @@
     Check if advertised bssid is the same as the mac device are sending data to
     Mess with client discovery to see if there is a better way to go about it
 
-    Look into why correct AP name is no longer advertised
+    Look into why correct AP name is no longer advertised when clearing nvs flash
+
+    Filter out broadcast mac addresses when scanning for clients
+    https://en.wikipedia.org/wiki/Multicast_address#Ethernet
 */
 
 //configure AP
@@ -124,8 +127,47 @@ void parseBeacon(wifi_promiscuous_pkt_t *mgmtPacket, signed rssi, uint8_t channe
 }
 
 
+bool checkIfMulticast(uint8_t macAddr[]) {
+    //Avoid mac addresses baing added as clients
+    uint8_t multicast1[] = {0x01, 0x80, 0xC2};
+    uint8_t multicast2[] = {0x01, 0x1B, 0x19};
+    uint8_t multicast3[] = {0x01, 0x00, 0x5E};
+    uint8_t multicast4[] = {0x33, 0x33};
+    uint8_t multicast5[] = {0x01, 0x0C, 0xCD};
+    uint8_t multicast6[] = {0x01, 0x00, 0x0C};
+    uint8_t multicast7[] = {0xFF, 0xFF, 0xFF};
+
+    if(memcmp(macAddr, multicast1, sizeof(multicast1)) == 0) {
+        return true;
+    }
+    else if(memcmp(macAddr, multicast2, sizeof(multicast2)) == 0) {
+        return true;
+    }
+    //else if(memcmp(&macAddr, multicast3, sizeof(multicast3)) == 0) {
+    else if(macAddr[0] == multicast3[0] && macAddr[1] == multicast3[1] && macAddr[2] == multicast3[2]) {
+        return true;
+    }
+    else if(memcmp(macAddr, multicast4, sizeof(multicast4)) == 0) {
+        return true;
+    }
+    else if(memcmp(macAddr, multicast5, sizeof(multicast5)) == 0) {
+        return true;
+    }
+    else if(memcmp(macAddr, multicast6, sizeof(multicast6)) == 0) {
+        return true;
+    }
+    else if(memcmp(macAddr, multicast7, sizeof(multicast7)) == 0) {
+        return true;
+    }
+    Serial.printf("%x and %x\n", macAddr[0], multicast3[0]);
+    Serial.printf("%x and %x\n", macAddr[1], multicast3[1]);
+    Serial.printf("%x and %x\n", macAddr[2], multicast3[2]);
+
+    return false;
+}
+
+
 void scanForClient(wifi_promiscuous_pkt_t *mgmtPacket) {
-    uint8_t broadcastAddr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
     BeaconFrame *beacon = (BeaconFrame*)mgmtPacket->payload;
     uint8_t destAddr[6];
     uint8_t recvAddr[6];
@@ -135,13 +177,13 @@ void scanForClient(wifi_promiscuous_pkt_t *mgmtPacket) {
     //Get position mac is stored in
     int posDestAddr = apInfo.checkExisting(destAddr);
     int posRecvAddr = apInfo.checkExisting(recvAddr);
-    if(posDestAddr != -1 && memcmp(broadcastAddr, destAddr, 6) != 0) {
+    if(posDestAddr != -1 && !checkIfMulticast(destAddr)) {
         uint8_t sendAddr[6];
         beacon->getSenderAddress(sendAddr, 6);
         Serial.println("Destination MAC exists");
         apInfo.addClient(sendAddr, posDestAddr);
     }
-    if(posRecvAddr != -1 && memcmp(broadcastAddr, recvAddr, 6) != 0) {
+    if(posRecvAddr != -1 && !checkIfMulticast(recvAddr)) {
         uint8_t clientAddr[6];
         beacon->getDestinationAddress(clientAddr, 6);
         Serial.println("Redvier MAC exists");
