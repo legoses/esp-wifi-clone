@@ -6,6 +6,7 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 #include <Arduino.h>
+#include <NumConfig.h>
 
 //Nordic UART service uuid. Do no change
 //https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/nrf/libraries/bluetooth_services/services/nus.html
@@ -13,10 +14,10 @@
 #define CHARACTERISTIC_UUID_RX "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
 #define CHARACTERISTIC_UUID_TX "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
 
-class BLETerm {
-    const static int INPUT_MAX_LEN = 100;
-    const static int cmdLen = 32;
-    static char cmdArray[10][cmdLen];
+class BLETerm : public ScanConstant {
+    //const static int INPUT_MAX_LEN = 100;
+    //const static int cmdLen = 32;
+    static char cmdArray[NUM_COMMANDS][cmdLen];
     static bool deviceConnected; 
     static bool oldDeviceConnected; 
     static int curCommand;

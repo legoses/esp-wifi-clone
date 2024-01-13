@@ -2,11 +2,12 @@
 #define APINFO_H
 #include <stdint.h>
 #include <Arduino.h>
+#include <NumConfig.h>
 
 
-class APInfo {
-    static const int numAP = 20;
-    static const int numClient = 40;
+class APInfo : public ScanConstant {
+    //static const int numAP = 20;
+    //static const int numClient = 40;
     uint8_t **SSID;
     int ssidLen[numAP];
     uint8_t BSSID[numAP][6];

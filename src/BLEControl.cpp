@@ -2,7 +2,7 @@
 
 int BLETerm::userCmdLen = 0;
 
-char BLETerm::cmdArray[10][cmdLen] = {
+char BLETerm::cmdArray[NUM_COMMANDS][cmdLen] = {
     "help", //0
     "scan-ap", //1 
     "scan-stop", //2
@@ -12,7 +12,8 @@ char BLETerm::cmdArray[10][cmdLen] = {
     "select-ap", //6
     "select-clients", //7
     "select-all-clients", //8
-    "start" //9
+    "start", //9
+    "connect-wifi" //10
     };
 bool BLETerm::deviceConnected = false;
 bool BLETerm::oldDeviceConnected = false;
@@ -51,7 +52,7 @@ bool BLETerm::getOldDeviceConnected() {
 
 //Match the command to the array
 void BLETerm::parseCommand(char cmd[], int len) {
-    for(int i = 0; i < 10; i++) {
+    for(int i = 0; i < NUM_COMMANDS; i++) {
         if(memcmp(this->cmdArray[i], cmd, len-1) == 0) {
             Serial.println("Match Found");
             this->curCommand = i;
@@ -67,7 +68,7 @@ void BLETerm::parseCommand(char cmd[], int len) {
 void BLETerm::parseCommand(char cmd[], int len, int fullLen) {
     Serial.print("Pass cmd: ");
     Serial.println(cmd);
-    for(int i = 0; i < 10; i++) {
+    for(int i = 0; i < NUM_COMMANDS; i++) {
         if(memcmp(this->cmdArray[i], cmd, len-1) == 0) {
             Serial.println("Match Found");
             this->curCommand = i;
@@ -110,7 +111,7 @@ void MyServerCallbacks::onConnect(BLEServer *pServer) {
 void MyServerCallbacks::onDisconnect(BLEServer *pServer) {
     setDeviceConnected(false);
 }
-
+/*
 //I fucked up the command handling, but don't feel like redoing it, so its going to be clunky
 void MyCallbacks::onWrite(BLECharacteristic *pCharacteristic) {
     const char *rxValue = pCharacteristic->getValue().c_str();
@@ -156,7 +157,7 @@ void MyCallbacks::onWrite(BLECharacteristic *pCharacteristic) {
         }
     }
 }
-
+*/
 void handleBLEConnection(void *pvParameter) {
     BLETerm bleTerm = *((BLETerm*)pvParameter);
     uint8_t txVal = 1;
@@ -174,6 +175,51 @@ void handleBLEConnection(void *pvParameter) {
             bleTerm.setOldDeviceConnected(device);
         }
         delay(1000);
+    }
+}
+
+void MyCallbacks::onWrite(BLECharacteristic *pCharacteristic) {
+    const char *rxValue = pCharacteristic->getValue().c_str();
+    int rxValueLen = strlen(rxValue);
+    
+
+    Serial.println(rxValue);
+    if(rxValueLen > 0) {
+        setCommandLength(rxValueLen); //Store command length
+        char cmd[rxValueLen+1];
+        int flagsExist = 0;
+        int divider;
+        
+        //convert command to lowercase 
+        for(int i = 0; i < rxValueLen; i++) {
+            //look for space in command, indicating flags exist and no spaces exist at beginning of command
+            if(rxValue[i] == ' ' && flagsExist != 1 && i > 0) {
+                flagsExist = 1;
+                divider = i;
+                cmd[i] = rxValue[i];
+            }
+            else if(rxValue[i] == ' ') { //Get rid of any extra spaces
+                delay(1);
+            }
+            //Get rid of control characters such as line breaks, and make sure tolower is not applied to an integer
+            else if(flagsExist == 0 && rxValue[i] > 31 && isdigit(rxValue[i]) == 0) {
+                cmd[i] = tolower(rxValue[i]);
+            }
+            else {
+                cmd[i] = rxValue[i];
+            }
+            if(i == rxValueLen-1) {
+                cmd[i+1] = '\0'; //Add null to end of string
+            }
+        }
+        //print out full recieved command
+        if(flagsExist == 0) {
+            parseCommand(cmd, rxValueLen);
+        }
+        else {
+            //send space location so function only compares the actual command, not flags
+            parseCommand(cmd, divider, rxValueLen);
+        }
     }
 }
 

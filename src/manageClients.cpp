@@ -10,7 +10,7 @@ bool ConnectedClients::checkIfClientExists(uint8_t client[]) {
 }
 
 void ConnectedClients::addClient(uint8_t client[]) {
-    if(this->numConnectedClients < 50) {
+    if(this->numConnectedClients < numClient) {
         memcpy(this->connectedClients[numConnectedClients], client, 6);
         this->numConnectedClients++;
     }

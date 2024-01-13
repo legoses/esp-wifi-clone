@@ -3,9 +3,10 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <NumConfig.h>
 
-class ConnectedClients {
-    uint8_t connectedClients[50][6];
+class ConnectedClients : public ScanConstant {
+    uint8_t connectedClients[numClient][6];
     int numConnectedClients = 0;
 
     public:
