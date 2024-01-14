@@ -11,10 +11,6 @@
 #include "esp_netif.h"
 
 
-//Wifi network esp32 will connect to
-#define SSID "Galaxy S21 5G a856"
-#define PASSWORD "rpm1188A"
-
 /*
     TODO:
     https://stackoverflow.com/questions/21411851/how-to-send-data-over-a-raw-ethernet-socket-using-sendto-without-using-sockaddr
